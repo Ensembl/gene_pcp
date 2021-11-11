@@ -25,5 +25,6 @@
 
 # other file formats
 *.html
+*.ipynb
 
 data
