@@ -37,7 +37,7 @@ from loguru import logger
 from utils import data_directory, fasta_to_dict, logging_format, sizeof_fmt
 
 
-def generate_dataset_pickle(coding_transcripts_path, non_coding_transcripts_path):
+def generate_datasets(coding_transcripts_path, non_coding_transcripts_path):
     """
     Generate a pandas dataframe from raw FASTA files with coding and non-coding gene
     transcripts and save it to a pickle file.
@@ -80,12 +80,44 @@ def generate_dataset_pickle(coding_transcripts_path, non_coding_transcripts_path
     dataframe_columns = ["transcript_id", "description", "sequence", "coding"]
     dataset = pd.DataFrame(examples_dictionaries, columns=dataframe_columns)
 
+    generate_dataset_statistics(dataset)
+
     # save dataset as a pickle file
     dataset_path = data_directory / "dataset.pickle"
     dataset.to_pickle(dataset_path)
     logger.info(f"dataset saved at {dataset_path}")
 
-    generate_dataset_statistics(dataset)
+    generate_dev_datasets(dataset)
+
+
+def generate_dev_datasets(dataset, random_seed=7):
+    """
+    Generate and save subsets of the full dataset for faster loading during development.
+
+    Args:
+        dataset (pandas DataFrame): full dataset dataframe
+    """
+    dev_dataset_percentages = [1, 5, 20]
+
+    for dev_dataset_percentage in dev_dataset_percentages:
+        logger.info(f"generating {dev_dataset_percentage}% dev dataset ...")
+        fraction = dev_dataset_percentage / 100
+
+        coding = dataset.loc[dataset["coding"] == True]
+        non_coding = dataset.loc[dataset["coding"] == False]
+
+        coding = coding.sample(frac=fraction, random_state=random_seed)
+        non_coding = non_coding.sample(frac=fraction, random_state=random_seed)
+
+        dev_dataset = pd.concat([coding, non_coding])
+        dev_dataset = dev_dataset.sort_index()
+
+        generate_dataset_statistics(dev_dataset)
+
+        # save dataframe to a pickle file
+        pickle_path = data_directory / f"{dev_dataset_percentage}_pct_dataset.pickle"
+        dev_dataset.to_pickle(pickle_path)
+        logger.info(f"{dev_dataset_percentage}% dev dataset saved at {pickle_path}")
 
 
 def generate_dataset_statistics(dataset=None):
@@ -98,9 +130,6 @@ def generate_dataset_statistics(dataset=None):
         dataset = pd.read_pickle(dataset_path)
         logger.info("dataset loaded")
 
-    dataset_object_size = sys.getsizeof(dataset)
-    logger.info("dataset object memory usage: {}".format(sizeof_fmt(dataset_object_size)))
-
     num_examples = len(dataset)
     coding_value_counts = dataset["coding"].value_counts()
     num_coding = coding_value_counts[True].item()
@@ -108,6 +137,9 @@ def generate_dataset_statistics(dataset=None):
     logger.info(
         f"dataset contains {num_coding:,} coding and {num_non_coding:,} non-coding transcripts, {num_examples:,} in total"
     )
+
+    dataset_object_size = sys.getsizeof(dataset)
+    logger.info("dataset object memory usage: {}".format(sizeof_fmt(dataset_object_size)))
 
     dataset["sequence_length"] = dataset["sequence"].str.len()
 
@@ -125,9 +157,9 @@ def main():
     """
     argument_parser = argparse.ArgumentParser()
     argument_parser.add_argument(
-        "--generate_dataset_pickle",
+        "--generate_datasets",
         action="store_true",
-        help="generate pickled pandas dataframe with all dataset samples",
+        help="generate full and dev dataset dataframes saved as pickle files",
     )
     argument_parser.add_argument(
         "--coding_transcripts_path",
@@ -153,13 +185,11 @@ def main():
     logger.add(log_file_path, format=logging_format)
 
     if (
-        args.generate_dataset_pickle
+        args.generate_datasets
         and args.coding_transcripts_path
         and args.non_coding_transcripts_path
     ):
-        generate_dataset_pickle(
-            args.coding_transcripts_path, args.non_coding_transcripts_path
-        )
+        generate_datasets(args.coding_transcripts_path, args.non_coding_transcripts_path)
     elif args.generate_dataset_statistics:
         generate_dataset_statistics()
     else:
