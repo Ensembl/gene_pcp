@@ -34,7 +34,7 @@ import pandas as pd
 from loguru import logger
 
 # project imports
-from utils import data_directory, fasta_to_dict, logging_format
+from utils import data_directory, fasta_to_dict, logging_format, sizeof_fmt
 
 
 def generate_dataset_pickle(coding_transcripts_path, non_coding_transcripts_path):
@@ -85,6 +85,39 @@ def generate_dataset_pickle(coding_transcripts_path, non_coding_transcripts_path
     dataset.to_pickle(dataset_path)
     logger.info(f"dataset saved at {dataset_path}")
 
+    generate_dataset_statistics(dataset)
+
+
+def generate_dataset_statistics(dataset=None):
+    """
+    Generate and log dataset statistics.
+    """
+    if dataset is None:
+        dataset_path = data_directory / "dataset.pickle"
+        logger.info(f"loading dataset {dataset_path} ...")
+        dataset = pd.read_pickle(dataset_path)
+        logger.info("dataset loaded")
+
+    dataset_object_size = sys.getsizeof(dataset)
+    logger.info("dataset object memory usage: {}".format(sizeof_fmt(dataset_object_size)))
+
+    num_examples = len(dataset)
+    coding_value_counts = dataset["coding"].value_counts()
+    num_coding = coding_value_counts[True].item()
+    num_non_coding = coding_value_counts[False].item()
+    logger.info(
+        f"dataset contains {num_coding:,} coding and {num_non_coding:,} non-coding transcripts, {num_examples:,} in total"
+    )
+
+    dataset["sequence_length"] = dataset["sequence"].str.len()
+
+    sequence_length_mean = dataset["sequence_length"].mean()
+    sequence_length_median = dataset["sequence_length"].median()
+    sequence_length_standard_deviation = dataset["sequence_length"].std()
+    logger.info(
+        f"sequences length mean: {sequence_length_mean:.2f}, median: {sequence_length_median:.2f}, standard deviation: {sequence_length_standard_deviation:.2f}"
+    )
+
 
 def main():
     """
@@ -104,6 +137,11 @@ def main():
         "--non_coding_transcripts_path",
         help="non-coding sequences FASTA path",
     )
+    argument_parser.add_argument(
+        "--generate_dataset_statistics",
+        action="store_true",
+        help="generate and log dataset statistics",
+    )
 
     args = argument_parser.parse_args()
 
@@ -122,6 +160,8 @@ def main():
         generate_dataset_pickle(
             args.coding_transcripts_path, args.non_coding_transcripts_path
         )
+    elif args.generate_dataset_statistics:
+        generate_dataset_statistics()
     else:
         print("Error: missing argument.")
         print(__doc__)
