@@ -17,15 +17,8 @@
 import pathlib
 
 # %%
-import pandas as pd
-
-# %%
-#pd.set_option("display.max_rows", 100)
-#pd.set_option("display.max_columns", 100)
-#pd.set_option("display.width", 1000)
-
-# %%
 import matplotlib.pyplot as plt
+import pandas as pd
 
 # %%
 # figsize = (12, 8)
@@ -35,17 +28,22 @@ figsize = (16, 9)
 data_directory = pathlib.Path("../data")
 
 # %%
-dataset_path = data_directory / "dataset.pickle"
-data = pd.read_pickle(dataset_path)
+# dataset_filename = "1_pct_dataset.pickle"
+dataset_filename = "5_pct_dataset.pickle"
+# dataset_filename = "20_pct_dataset.pickle"
+# dataset_filename = "dataset.pickle"
+
+dataset_path = data_directory / dataset_filename
+dataset = pd.read_pickle(dataset_path)
 
 # %%
-data.head()
+dataset.head()
 
 # %%
-data.sample(10, random_state=5).sort_index()
+dataset.sample(10, random_state=7).sort_index()
 
 # %%
-data.info()
+dataset.info()
 
 # %%
 
@@ -57,10 +55,10 @@ data.info()
 # ## stats
 
 # %%
-data["transcript_id"].value_counts()
+dataset["transcript_id"].value_counts()
 
 # %%
-data["sequence"].value_counts().values
+dataset["sequence"].value_counts().values
 
 # %%
 
@@ -72,28 +70,28 @@ data["sequence"].value_counts().values
 # ## sequence length
 
 # %%
-data["sequence_length"] = data["sequence"].str.len()
+dataset["sequence_length"] = dataset["sequence"].str.len()
 
 # %%
-data.head()
-
-# %%
-
-# %%
-data["sequence_length"].sort_values()
+dataset.head()
 
 # %%
 
 # %%
-data.iloc[data["sequence_length"].sort_values().index[-10:]]
+dataset["sequence_length"].sort_values()
+
+# %%
+
+# %%
+dataset.loc[dataset["sequence_length"].sort_values().index][-10:]
 
 # %%
 
 # %%
 figure = plt.figure()
-ax = data["sequence_length"].hist(figsize=figsize, bins=512)
+ax = dataset["sequence_length"].hist(figsize=figsize, bins=512)
 ax.axvline(
-    x=round(data["sequence_length"].mean() + 0.5 * data["sequence_length"].std()),
+    x=round(dataset["sequence_length"].mean() + 0.5 * dataset["sequence_length"].std()),
     color="r",
     linewidth=1,
 )
