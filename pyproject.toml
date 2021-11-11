@@ -10,6 +10,7 @@ python = "^3.9"
 biopython = "^1.79"
 loguru = "^0.5.3"
 pandas = "^1.3.4"
+torch = "^1.10.0"
 
 [tool.poetry.dev-dependencies]
 pudb = "^2021.2.2"
