@@ -29,9 +29,9 @@ data_directory = pathlib.Path("../data")
 
 # %%
 # dataset_filename = "1_pct_dataset.pickle"
-dataset_filename = "5_pct_dataset.pickle"
+# dataset_filename = "5_pct_dataset.pickle"
 # dataset_filename = "20_pct_dataset.pickle"
-# dataset_filename = "dataset.pickle"
+dataset_filename = "dataset.pickle"
 
 dataset_path = data_directory / dataset_filename
 dataset = pd.read_pickle(dataset_path)
