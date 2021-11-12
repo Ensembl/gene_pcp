@@ -28,12 +28,115 @@ import itertools
 import pathlib
 
 # third party imports
+import Bio
+import pandas as pd
+import torch
+import torch.nn.functional as F
+
 from Bio import SeqIO
+from loguru import logger
+from torch.utils.data import Dataset
 
 
 data_directory = pathlib.Path("data")
 
 logging_format = "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{message}</level>"
+
+
+class DnaSequenceMapper:
+    """
+    Class for translating DNA sequences to one-hot encoding.
+    """
+
+    def __init__(self):
+        nucleobase_symbols = ["A", "C", "G", "T", "N"]
+        padding_character = [" "]
+
+        self.nucleobase_letters = nucleobase_symbols + padding_character
+
+        self.nucleobase_letter_to_index = {
+            nucleobase_letter: index
+            for index, nucleobase_letter in enumerate(self.nucleobase_letters)
+        }
+
+        self.num_nucleobase_letters = len(self.nucleobase_letters)
+
+    def nucleobase_to_one_hot(self, sequence):
+        sequence_indexes = [
+            self.nucleobase_letter_to_index[nucleobase_letter]
+            for nucleobase_letter in sequence
+        ]
+        one_hot_sequence = F.one_hot(
+            torch.tensor(sequence_indexes), num_classes=self.num_nucleobase_letters
+        )
+        one_hot_sequence = one_hot_sequence.type(torch.float32)
+
+        return one_hot_sequence
+
+
+class SequenceDataset(Dataset):
+    """
+    Custom Dataset for raw sequences.
+    """
+
+    def __init__(self, dataset_pct, sequence_length, padding_side="right"):
+        dataset = load_dataset(dataset_pct)
+
+        # select the features and labels columns
+        self.dataset = dataset[["sequence", "coding"]]
+
+        # pad or truncate all sequences to size `sequence_length`
+        with SuppressSettingWithCopyWarning():
+            self.dataset["sequence"] = self.dataset["sequence"].str.pad(
+                width=sequence_length, side=padding_side, fillchar=" "
+            )
+            self.dataset["sequence"] = self.dataset["sequence"].str.slice(
+                stop=sequence_length
+            )
+
+        # generate DNA sequences mapper
+        self.dna_sequence_mapper = DnaSequenceMapper()
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, index):
+        sample = self.dataset.iloc[index].to_dict()
+
+        sequence = sample["sequence"]
+        coding = sample["coding"]
+
+        one_hot_sequence = self.dna_sequence_mapper.nucleobase_to_one_hot(sequence)
+        # one_hot_sequence.shape: (sequence_length, num_nucleobase_letters)
+
+        # flatten sequence matrix to a vector
+        flat_one_hot_sequence = torch.flatten(one_hot_sequence)
+        # flat_one_hot_sequence.shape: (sequence_length * num_nucleobase_letters,)
+
+        coding_value = int(coding)
+
+        item = flat_one_hot_sequence, coding_value
+
+        return item
+
+
+class SuppressSettingWithCopyWarning:
+    """
+    Suppress SettingWithCopyWarning warning.
+
+    https://stackoverflow.com/a/53954986
+    """
+
+    def __init__(self):
+        self.original_setting = None
+
+    def __enter__(self):
+        self.original_setting = pd.options.mode.chained_assignment
+        pd.options.mode.chained_assignment = None
+        return self
+
+    def __exit__(self, *args):
+        pd.options.mode.chained_assignment = self.original_setting
 
 
 def fasta_to_dict(fasta_file_path, separator=" "):
@@ -66,6 +169,31 @@ def fasta_to_dict(fasta_file_path, separator=" "):
             fasta_dict[first_word] = {"description": description, "sequence": sequence}
 
     return fasta_dict
+
+
+def load_dataset(dataset_pct=None):
+    """
+    Load the full or a dev dataset.
+
+    Args:
+        dataset_pct (int): Numerical identifier of the dev dataset to load.
+            Defaults to None for loading the full dataset.
+    Returns:
+        pandas DataFrame containing the loaded dataset
+    """
+    if dataset_pct is None:
+        dataset_path = data_directory / "dataset.pickle"
+        logger.info(f"loading full dataset {dataset_path} ...")
+        dataset = pd.read_pickle(dataset_path)
+        logger.info("full dataset loaded")
+    else:
+        dev_dataset_path = data_directory / f"{dataset_pct}_pct_dataset.pickle"
+        dataset = pd.read_pickle(dev_dataset_path)
+        logger.info(f"loading {dataset_pct}% dev dataset...")
+        dataset = pd.read_pickle(dev_dataset_path)
+        logger.info(f"{dataset_pct}% dev dataset loaded")
+
+    return dataset
 
 
 def read_fasta_in_chunks(fasta_file_path, num_chunk_entries=1024):
