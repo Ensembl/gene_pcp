@@ -79,8 +79,8 @@ class SequenceDataset(Dataset):
     Custom Dataset for raw sequences.
     """
 
-    def __init__(self, dataset_pct, sequence_length, padding_side="right"):
-        dataset = load_dataset(dataset_pct)
+    def __init__(self, dataset_id, sequence_length, padding_side="right"):
+        dataset = load_dataset(dataset_id)
 
         # select the features and labels columns
         self.dataset = dataset[["sequence", "coding"]]
@@ -171,27 +171,27 @@ def fasta_to_dict(fasta_file_path, separator=" "):
     return fasta_dict
 
 
-def load_dataset(dataset_pct=None):
+def load_dataset(dataset_id="full"):
     """
     Load the full or a dev dataset.
 
     Args:
-        dataset_pct (int): Numerical identifier of the dev dataset to load.
-            Defaults to None for loading the full dataset.
+        dataset_id (str): String identifier of the dataset to load.  Defaults to "full"
+            for loading the full dataset.
     Returns:
         pandas DataFrame containing the loaded dataset
     """
-    if dataset_pct is None:
+    if dataset_id == "full":
         dataset_path = data_directory / "dataset.pickle"
         logger.info(f"loading full dataset {dataset_path} ...")
         dataset = pd.read_pickle(dataset_path)
         logger.info("full dataset loaded")
     else:
-        dev_dataset_path = data_directory / f"{dataset_pct}_pct_dataset.pickle"
+        dev_dataset_path = data_directory / f"{dataset_id}_dataset.pickle"
         dataset = pd.read_pickle(dev_dataset_path)
-        logger.info(f"loading {dataset_pct}% dev dataset...")
+        logger.info(f"loading {dataset_id}% dev dataset...")
         dataset = pd.read_pickle(dev_dataset_path)
-        logger.info(f"{dataset_pct}% dev dataset loaded")
+        logger.info(f"{dataset_id}% dev dataset loaded")
 
     return dataset
 

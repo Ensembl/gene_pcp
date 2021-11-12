@@ -209,7 +209,7 @@ class Experiment:
 
         self.num_complete_epochs = 0
 
-        self.filename = f"{self.filename_prefix}_{self.dataset_pct}pct_{self.datetime}"
+        self.filename = f"{self.filename_prefix}_{self.dataset_id}_{self.datetime}"
 
         # self.padding_side = "left"
         self.padding_side = "right"
@@ -228,7 +228,7 @@ def generate_dataloaders(experiment):
         tuple containing the training, validation, and test dataloaders
     """
     dataset = SequenceDataset(
-        dataset_pct=experiment.dataset_pct,
+        dataset_id=experiment.dataset_id,
         sequence_length=experiment.sequence_length,
         padding_side=experiment.padding_side,
     )
@@ -331,7 +331,7 @@ def train_network(
     training_loader,
     validation_loader,
 ):
-    tensorboard_log_dir = f"runs/{experiment.dataset_pct}/{experiment.datetime}"
+    tensorboard_log_dir = f"runs/{experiment.dataset_id}/{experiment.datetime}"
     summary_writer = SummaryWriter(log_dir=tensorboard_log_dir)
 
     max_epochs = experiment.max_epochs

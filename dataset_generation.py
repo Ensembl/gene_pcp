@@ -99,9 +99,10 @@ def generate_dev_datasets(dataset, random_seed=7):
     """
     dev_dataset_percentages = [1, 5, 20]
 
-    for dev_dataset_percentage in dev_dataset_percentages:
-        logger.info(f"generating {dev_dataset_percentage}% dev dataset ...")
-        fraction = dev_dataset_percentage / 100
+    for dataset_percentage in dev_dataset_percentages:
+        dataset_id = f"{dataset_percentage}pct"
+        logger.info(f"generating {dataset_percentage}% dev dataset ...")
+        fraction = dataset_percentage / 100
 
         coding = dataset.loc[dataset["coding"] == True]
         non_coding = dataset.loc[dataset["coding"] == False]
@@ -115,9 +116,9 @@ def generate_dev_datasets(dataset, random_seed=7):
         generate_dataset_statistics(dev_dataset)
 
         # save dataframe to a pickle file
-        pickle_path = data_directory / f"{dev_dataset_percentage}_pct_dataset.pickle"
+        pickle_path = data_directory / f"{dataset_id}_dataset.pickle"
         dev_dataset.to_pickle(pickle_path)
-        logger.info(f"{dev_dataset_percentage}% dev dataset saved at {pickle_path}")
+        logger.info(f"{dataset_percentage}% dev dataset saved at {pickle_path}")
 
 
 def generate_dataset_statistics(dataset=None):

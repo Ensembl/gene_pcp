@@ -14,10 +14,10 @@ filename_prefix: experiment
 
 # dataset
 ################################################################################
-dataset_pct: 1
-#dataset_pct: 5
-#dataset_pct: 20
-#dataset_pct: 100
+dataset_id: 1pct
+#dataset_id: 5pct
+#dataset_id: 20pct
+#dataset_id: full
 
 # training, validation, test split
 test_ratio: 0.1
