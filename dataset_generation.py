@@ -165,11 +165,6 @@ def main():
         "--non_coding_transcripts_path",
         help="non-coding sequences FASTA path",
     )
-    argument_parser.add_argument(
-        "--generate_dataset_statistics",
-        action="store_true",
-        help="generate and log dataset statistics",
-    )
 
     args = argument_parser.parse_args()
 
@@ -186,8 +181,6 @@ def main():
         and args.non_coding_transcripts_path
     ):
         generate_datasets(args.coding_transcripts_path, args.non_coding_transcripts_path)
-    elif args.generate_dataset_statistics:
-        generate_dataset_statistics()
     else:
         print("Error: missing argument.")
         print(__doc__)
