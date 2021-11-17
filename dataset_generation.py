@@ -96,6 +96,7 @@ def generate_dev_datasets(dataset, random_seed=7):
 
     Args:
         dataset (pandas DataFrame): full dataset dataframe
+        random_seed (int): random seed to initialize pandas sample random state
     """
     dev_dataset_percentages = [1, 5, 20]
 
