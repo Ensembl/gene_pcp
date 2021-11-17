@@ -122,16 +122,10 @@ def generate_dev_datasets(dataset, random_seed=7):
         logger.info(f"{dataset_percentage}% dev dataset saved at {pickle_path}")
 
 
-def generate_dataset_statistics(dataset=None):
+def generate_dataset_statistics(dataset):
     """
     Generate and log dataset statistics.
     """
-    if dataset is None:
-        dataset_path = data_directory / "dataset.pickle"
-        logger.info(f"loading dataset {dataset_path} ...")
-        dataset = pd.read_pickle(dataset_path)
-        logger.info("dataset loaded")
-
     num_examples = len(dataset)
     coding_value_counts = dataset["coding"].value_counts()
     num_coding = coding_value_counts[True].item()
