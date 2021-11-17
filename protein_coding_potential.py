@@ -118,72 +118,6 @@ class ProteinCodingClassifier(nn.Module):
         return predictions
 
 
-class EarlyStopping:
-    """
-    Stop training if validation loss doesn't improve during a specified patience period.
-    """
-
-    def __init__(self, patience=7, loss_delta=0):
-        """
-        Args:
-            checkpoint_path (path-like object): Path to save the checkpoint.
-            patience (int): Number of calls to continue training if validation loss is not improving. Defaults to 7.
-            loss_delta (float): Minimum change in the monitored quantity to qualify as an improvement. Defaults to 0.
-        """
-        self.patience = patience
-        self.loss_delta = loss_delta
-
-        self.no_progress = 0
-        self.min_validation_loss = np.Inf
-
-    def __call__(
-        self,
-        network,
-        optimizer,
-        experiment,
-        validation_loss,
-        checkpoint_path,
-    ):
-        if self.min_validation_loss == np.Inf:
-            self.min_validation_loss = validation_loss
-            logger.info("saving first network checkpoint...")
-            checkpoint = {
-                "experiment": experiment,
-                "network_state_dict": network.state_dict(),
-                "optimizer_state_dict": optimizer.state_dict(),
-            }
-            torch.save(checkpoint, checkpoint_path)
-
-        elif validation_loss <= self.min_validation_loss - self.loss_delta:
-            validation_loss_decrease = self.min_validation_loss - validation_loss
-            assert (
-                validation_loss_decrease > 0
-            ), f"{validation_loss_decrease=}, should be a positive number"
-            logger.info(
-                f"validation loss decreased by {validation_loss_decrease:.4f}, saving network checkpoint..."
-            )
-
-            self.min_validation_loss = validation_loss
-            self.no_progress = 0
-            checkpoint = {
-                "experiment": experiment,
-                "network_state_dict": network.state_dict(),
-                "optimizer_state_dict": optimizer.state_dict(),
-            }
-            torch.save(checkpoint, checkpoint_path)
-
-        else:
-            self.no_progress += 1
-
-            if self.no_progress == self.patience:
-                logger.info(
-                    f"{self.no_progress} epochs with no validation loss improvement, stopping training"
-                )
-                return True
-
-        return False
-
-
 class Experiment:
     """
     Object containing settings values and status of an experiment.
@@ -201,8 +135,8 @@ class Experiment:
             self.random_seed = random.randint(1, 100)
 
         # early stopping
-        loss_delta = 0.001
-        self.stop_early = EarlyStopping(self.patience, loss_delta)
+        self.no_progress = 0
+        self.min_validation_loss = np.Inf
 
         # loss function
         self.criterion = nn.BCELoss()
@@ -485,13 +419,40 @@ def train_network(
             f"training batch average execution time: {average_batch_execution_time:.2f}s | average loading time: {average_batch_loading_time:.2f}s ({num_train_batches - 1} complete batches)"
         )
 
-        if experiment.stop_early(
-            network,
-            optimizer,
-            experiment,
-            average_validation_loss,
-            checkpoint_path,
-        ):
+        # early stopping
+        if experiment.min_validation_loss == np.Inf:
+            experiment.min_validation_loss = average_validation_loss
+            logger.info("saving first network checkpoint...")
+            checkpoint = {
+                "experiment": experiment,
+                "network_state_dict": network.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+            }
+            torch.save(checkpoint, checkpoint_path)
+
+        elif average_validation_loss <= experiment.min_validation_loss - experiment.loss_delta:
+            validation_loss_decrease = experiment.min_validation_loss - average_validation_loss
+            logger.info(
+                f"validation loss decreased by {validation_loss_decrease:.5f}, saving network checkpoint..."
+            )
+
+            experiment.min_validation_loss = average_validation_loss
+            experiment.no_progress = 0
+            checkpoint = {
+                "experiment": experiment,
+                "network_state_dict": network.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+            }
+            torch.save(checkpoint, checkpoint_path)
+
+        # average_validation_loss > experiment.min_validation_loss - experiment.loss_delta
+        else:
+            experiment.no_progress += 1
+
+        if experiment.no_progress == experiment.patience:
+            logger.info(
+                f"{experiment.no_progress} epochs with no validation loss improvement, stopping training"
+            )
             summary_writer.flush()
             summary_writer.close()
             break
