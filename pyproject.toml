@@ -13,6 +13,7 @@ torch = "^1.10.0"
 torchmetrics = "^0.6.0"
 PyYAML = "^6.0"
 tensorboard = "^2.7.0"
+pytorch-lightning = "^1.5.7"
 
 [tool.poetry.dev-dependencies]
 pudb = "^2021.2.2"
