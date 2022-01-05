@@ -25,7 +25,9 @@ Project module with general definitions and statements.
 
 # standard library imports
 import itertools
+import logging
 import pathlib
+import sys
 
 # third party imports
 import pandas as pd
@@ -33,13 +35,27 @@ import torch
 import torch.nn.functional as F
 
 from Bio import SeqIO
-from loguru import logger
 from torch.utils.data import Dataset
 
 
 data_directory = pathlib.Path("data")
 
-logging_format = "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{message}</level>"
+# logging formats
+logging_formatter_time_message = logging.Formatter(
+    fmt="%(asctime)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logging_formatter_message = logging.Formatter(fmt="%(message)s")
+
+# set up base logger
+logger = logging.getLogger("main_logger")
+logger.setLevel(logging.DEBUG)
+logger.propagate = False
+# create console handler and add to logger
+console_handler = logging.StreamHandler(sys.stderr)
+console_handler.setLevel(logging.DEBUG)
+console_handler.setFormatter(logging_formatter_time_message)
+logger.addHandler(console_handler)
 
 
 class DnaSequenceMapper:

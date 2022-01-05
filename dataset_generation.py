@@ -26,15 +26,20 @@ and save it to a pickle file.
 
 # standard library imports
 import argparse
+import logging
 import sys
 
 # third party imports
 import pandas as pd
 
-from loguru import logger
-
 # project imports
-from utils import data_directory, fasta_to_dict, logging_format, sizeof_fmt
+from utils import (
+    data_directory,
+    fasta_to_dict,
+    logger,
+    logging_formatter_time_message,
+    sizeof_fmt,
+)
 
 
 def generate_datasets(coding_transcripts_path, non_coding_transcripts_path):
@@ -168,12 +173,14 @@ def main():
 
     args = argument_parser.parse_args()
 
-    # set up logger
-    logger.remove()
-    logger.add(sys.stderr, format=logging_format)
-    data_directory.mkdir(exist_ok=True)
+    data_directory.mkdir(parents=True, exist_ok=True)
+
+    # create file handler and add to logger
     log_file_path = data_directory / "dataset_generation.log"
-    logger.add(log_file_path, format=logging_format)
+    file_handler = logging.FileHandler(log_file_path, mode="a+")
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(logging_formatter_time_message)
+    logger.addHandler(file_handler)
 
     if (
         args.generate_datasets

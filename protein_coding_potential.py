@@ -26,6 +26,7 @@ Train a coding / non-coding ORF classifier.
 # standard library imports
 import argparse
 import datetime as dt
+import logging
 import math
 import pathlib
 import pprint
@@ -39,13 +40,17 @@ import torch
 import torchmetrics
 import yaml
 
-from loguru import logger
 from torch import nn
 from torch.utils.data import DataLoader, random_split
 from torch.utils.tensorboard import SummaryWriter
 
 # project imports
-from utils import SequenceDataset, data_directory, logging_format
+from utils import (
+    SequenceDataset,
+    data_directory,
+    logger,
+    logging_formatter_time_message,
+)
 
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -430,8 +435,13 @@ def train_network(
             }
             torch.save(checkpoint, checkpoint_path)
 
-        elif average_validation_loss <= experiment.min_validation_loss - experiment.loss_delta:
-            validation_loss_decrease = experiment.min_validation_loss - average_validation_loss
+        elif (
+            average_validation_loss
+            <= experiment.min_validation_loss - experiment.loss_delta
+        ):
+            validation_loss_decrease = (
+                experiment.min_validation_loss - average_validation_loss
+            )
             logger.info(
                 f"validation loss decreased by {validation_loss_decrease:.5f}, saving network checkpoint..."
             )
@@ -564,10 +574,6 @@ def main():
 
     args = argument_parser.parse_args()
 
-    # set up logger
-    logger.remove()
-    logger.add(sys.stderr, format=logging_format)
-
     # train a new classifier
     if args.train and args.experiment_settings:
         # read the experiment settings YAML file to a dictionary
@@ -583,8 +589,13 @@ def main():
         experiment = Experiment(experiment_settings, datetime)
 
         pathlib.Path(experiment.experiment_directory).mkdir(exist_ok=True)
+
+        # create file handler and add to logger
         log_file_path = f"{experiment.experiment_directory}/{experiment.filename}.log"
-        logger.add(log_file_path, format=logging_format)
+        file_handler = logging.FileHandler(log_file_path, mode="a+")
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(logging_formatter_time_message)
+        logger.addHandler(file_handler)
 
         log_pytorch_cuda_info()
 
