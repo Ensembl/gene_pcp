@@ -106,7 +106,6 @@ class ProteinCodingClassifier(nn.Module):
 
         return x
 
-    # @staticmethod
     def get_predictions(self, output):
         """
         Get predictions.

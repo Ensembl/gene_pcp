@@ -28,7 +28,6 @@ import itertools
 import pathlib
 
 # third party imports
-import Bio
 import pandas as pd
 import torch
 import torch.nn.functional as F
@@ -189,9 +188,9 @@ def load_dataset(dataset_id="full"):
     else:
         dev_dataset_path = data_directory / f"{dataset_id}_dataset.pickle"
         dataset = pd.read_pickle(dev_dataset_path)
-        logger.info(f"loading {dataset_id}% dev dataset...")
+        logger.info(f"loading {dataset_id} dev dataset...")
         dataset = pd.read_pickle(dev_dataset_path)
-        logger.info(f"{dataset_id}% dev dataset loaded")
+        logger.info(f"{dataset_id} dev dataset loaded")
 
     return dataset
 
