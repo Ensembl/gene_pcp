@@ -27,94 +27,167 @@ Train a coding / non-coding ORF classifier.
 import argparse
 import datetime as dt
 import logging
-import math
 import pathlib
-import pprint
 import random
 import sys
-import time
+import warnings
 
 # third party imports
-import numpy as np
+import pytorch_lightning as pl
 import torch
+import torch.nn.functional as F
 import torchmetrics
 import yaml
 
 from torch import nn
 from torch.utils.data import DataLoader, random_split
-from torch.utils.tensorboard import SummaryWriter
 
 # project imports
 from utils import (
+    AttributeDict,
     SequenceDataset,
-    data_directory,
+    log_pytorch_cuda_info,
     logger,
     logging_formatter_time_message,
 )
 
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
-class ProteinCodingClassifier(nn.Module):
+class ProteinCodingClassifier(pl.LightningModule):
     """
-    A neural network for classification of DNA sequences to protein coding or non-coding.
+    Neural network for protein coding or non-coding classification of DNA sequences.
     """
-
-    def __init__(
-        self,
-        sequence_length,
-        padding_side,
-        num_nucleobase_letters,
-        num_connections,
-        dropout_probability,
-        dna_sequence_mapper,
-    ):
-        """
-        Initialize the neural network.
-        """
+    def __init__(self, **kwargs):
         super().__init__()
 
-        self.sequence_length = sequence_length
-        self.padding_side = padding_side
-        self.dropout_probability = dropout_probability
-        self.dna_sequence_mapper = dna_sequence_mapper
+        self.save_hyperparameters()
 
-        input_size = self.sequence_length * num_nucleobase_letters
+        self.sequence_length = self.hparams.sequence_length
+        self.padding_side = self.hparams.padding_side
+        self.dna_sequence_mapper = self.hparams.dna_sequence_mapper
+
+        input_size = self.sequence_length * self.hparams.num_nucleobase_letters
         output_size = 1
 
-        self.input_layer = nn.Linear(in_features=input_size, out_features=num_connections)
-        if self.dropout_probability > 0:
-            self.dropout = nn.Dropout(self.dropout_probability)
+        self.input_layer = nn.Linear(
+            in_features=input_size, out_features=self.hparams.num_connections
+        )
 
+        # workaround for a bug when saving network to TorchScript format
+        self.hparams.dropout_probability = float(self.hparams.dropout_probability)
+
+        self.dropout = nn.Dropout(self.hparams.dropout_probability)
         self.relu = nn.ReLU()
 
         self.output_layer = nn.Linear(
-            in_features=num_connections, out_features=output_size
+            in_features=self.hparams.num_connections, out_features=output_size
         )
 
         self.final_activation = nn.Sigmoid()
 
-    def forward(self, x):
-        """
-        Perform a forward pass of the network.
-        """
-        x = self.input_layer(x)
-        if self.dropout_probability > 0:
-            x = self.dropout(x)
-        x = self.relu(x)
+        self.best_validation_accuracy = 0
 
+    def forward(self, x):
+        x = self.input_layer(x)
+        x = self.dropout(x)
+        x = self.relu(x)
         x = self.output_layer(x)
-        if self.dropout_probability > 0:
-            x = self.dropout(x)
+        x = self.dropout(x)
         x = self.final_activation(x)
 
         return x
 
+    def on_pretrain_routine_end(self):
+        logger.info("start network training")
+        logger.info(f"configuration:\n{self.hparams}")
+
+    def training_step(self, batch, batch_index):
+        features, labels = batch
+
+        # forward pass
+        output = self(features)
+
+        labels = labels.unsqueeze(1)
+        labels = labels.to(torch.float32)
+
+        training_loss = F.binary_cross_entropy(output, labels)
+        self.log("training_loss", training_loss)
+
+        # clip gradients to prevent the exploding gradient problem
+        if self.hparams.clip_max_norm > 0:
+            nn.utils.clip_grad_norm_(self.parameters(), self.hparams.clip_max_norm)
+
+        return training_loss
+
+    def on_validation_start(self):
+        self.validation_accuracy = torchmetrics.Accuracy(num_classes=2)
+
+    def validation_step(self, batch, batch_index):
+        features, labels = batch
+
+        # forward pass
+        output = self(features)
+
+        labels = labels.unsqueeze(1)
+        labels = labels.to(torch.float32)
+
+        validation_loss = F.binary_cross_entropy(output, labels)
+        self.log("validation_loss", validation_loss)
+
+        predictions = self.get_predictions(output)
+
+        labels = labels.to(torch.int32)
+        self.validation_accuracy(predictions, labels)
+
+    def on_validation_end(self):
+        self.best_validation_accuracy = max(
+            self.best_validation_accuracy,
+            self.validation_accuracy.compute().item(),
+        )
+
+    def on_test_start(self):
+        logger.info(f"best validation accuracy: {self.best_validation_accuracy:.4f}")
+
+        # save network in TorchScript format
+        experiment_directory_path = pathlib.Path(self.hparams.experiment_directory)
+        torchscript_path = experiment_directory_path / "torchscript_network.pt"
+        torchscript = self.to_torchscript()
+        torch.jit.save(torchscript, torchscript_path)
+
+        self.test_accuracy = torchmetrics.Accuracy(num_classes=2)
+        self.test_precision = torchmetrics.Precision(num_classes=2)
+        self.test_recall = torchmetrics.Recall(num_classes=2)
+
+    def test_step(self, batch, batch_index):
+        features, labels = batch
+
+        # forward pass
+        output = self(features)
+
+        predictions = self.get_predictions(output)
+
+        labels = labels.unsqueeze(1)
+
+        self.test_accuracy(predictions, labels)
+        self.test_precision(predictions, labels)
+        self.test_recall(predictions, labels)
+
+    def on_test_end(self):
+        # log statistics
+        test_accuracy = self.test_accuracy.compute()
+        precision = self.test_precision.compute()
+        recall = self.test_recall.compute()
+        logger.info(f"test accuracy: {test_accuracy:.4f} | precision: {precision:.4f} | recall: {recall:.4f}")
+
+    def configure_optimizers(self):
+        # optimization function
+        optimizer = torch.optim.Adam(
+            params=self.parameters(),
+            lr=self.hparams.learning_rate,
+            weight_decay=self.hparams.weight_decay,
+        )
+        return optimizer
+
     def get_predictions(self, output):
-        """
-        Get predictions.
-        """
         threshold_value = 0.5
         threshold = torch.Tensor([threshold_value])
 
@@ -122,435 +195,75 @@ class ProteinCodingClassifier(nn.Module):
         return predictions
 
 
-class Experiment:
-    """
-    Object containing settings values and status of an experiment.
-    """
-
-    def __init__(self, experiment_settings, datetime):
-        for attribute, value in experiment_settings.items():
-            setattr(self, attribute, value)
-
-        # experiment parameters
-        self.datetime = datetime
-
-        # set a seed for the PyTorch random number generator if not present
-        if not hasattr(self, "random_seed"):
-            self.random_seed = random.randint(1_000_000, 1_001_000)
-
-        # early stopping
-        self.no_progress = 0
-        self.min_validation_loss = np.Inf
-
-        # loss function
-        self.criterion = nn.BCELoss()
-
-        self.num_complete_epochs = 0
-
-        self.filename = f"{self.filename_prefix}_{self.dataset_id}_{self.datetime}"
-
-        # self.padding_side = "left"
-        self.padding_side = "right"
-
-    def __str__(self):
-        return pprint.pformat(self.__dict__, sort_dicts=False)
-
-
-def generate_dataloaders(experiment):
+def generate_dataloaders(configuration):
     """
     Generate training, validation, and test dataloaders from the dataset files.
 
     Args:
-        experiment (Experiment): Experiment object containing metadata
+        configuration (AttributeDict): experiment configuration AttributeDict
     Returns:
         tuple containing the training, validation, and test dataloaders
     """
     dataset = SequenceDataset(
-        dataset_id=experiment.dataset_id,
-        sequence_length=experiment.sequence_length,
-        padding_side=experiment.padding_side,
+        dataset_id=configuration.dataset_id,
+        sequence_length=configuration.sequence_length,
+        padding_side=configuration.padding_side,
     )
 
-    experiment.dna_sequence_mapper = dataset.dna_sequence_mapper
-    experiment.num_nucleobase_letters = (
-        experiment.dna_sequence_mapper.num_nucleobase_letters
+    configuration.dna_sequence_mapper = dataset.dna_sequence_mapper
+    configuration.num_nucleobase_letters = (
+        configuration.dna_sequence_mapper.num_nucleobase_letters
     )
 
     # calculate the training, validation, and test set size
     dataset_size = len(dataset)
-    experiment.validation_size = int(experiment.validation_ratio * dataset_size)
-    experiment.test_size = int(experiment.test_ratio * dataset_size)
-    experiment.training_size = (
-        dataset_size - experiment.validation_size - experiment.test_size
+    configuration.validation_size = int(configuration.validation_ratio * dataset_size)
+    configuration.test_size = int(configuration.test_ratio * dataset_size)
+    configuration.training_size = (
+        dataset_size - configuration.validation_size - configuration.test_size
     )
 
     # split dataset into training, validation, and test datasets
     training_dataset, validation_dataset, test_dataset = random_split(
         dataset,
         lengths=(
-            experiment.training_size,
-            experiment.validation_size,
-            experiment.test_size,
+            configuration.training_size,
+            configuration.validation_size,
+            configuration.test_size,
         ),
-        generator=torch.Generator().manual_seed(experiment.random_seed),
+        generator=torch.Generator().manual_seed(configuration.random_seed),
     )
 
     logger.info(
-        f"dataset split to training ({experiment.training_size}), validation ({experiment.validation_size}), and test ({experiment.test_size}) datasets"
+        f"dataset split to training ({configuration.training_size}), validation ({configuration.validation_size}), and test ({configuration.test_size}) datasets"
     )
 
     # set the batch size equal to the size of the smallest dataset if larger than that
-    experiment.batch_size = min(
-        experiment.batch_size,
-        experiment.training_size,
-        experiment.validation_size,
-        experiment.test_size,
+    configuration.batch_size = min(
+        configuration.batch_size,
+        configuration.training_size,
+        configuration.validation_size,
+        configuration.test_size,
     )
 
     training_loader = DataLoader(
         training_dataset,
-        batch_size=experiment.batch_size,
+        batch_size=configuration.batch_size,
         shuffle=True,
-        num_workers=experiment.num_workers,
+        num_workers=configuration.num_workers,
     )
     validation_loader = DataLoader(
         validation_dataset,
-        batch_size=experiment.batch_size,
-        shuffle=True,
-        num_workers=experiment.num_workers,
+        batch_size=configuration.batch_size,
+        num_workers=configuration.num_workers,
     )
     test_loader = DataLoader(
         test_dataset,
-        batch_size=experiment.batch_size,
-        shuffle=True,
-        num_workers=experiment.num_workers,
+        batch_size=configuration.batch_size,
+        num_workers=configuration.num_workers,
     )
 
     return (training_loader, validation_loader, test_loader)
-
-
-def load_checkpoint(checkpoint_path):
-    """
-    Load an experiment checkpoint and return the experiment, network, and optimizer objects.
-
-
-    Args:
-        checkpoint_path (path-like object): path to the saved experiment checkpoint
-    Returns:
-        tuple[Experiment, torch.nn.Module, torch.optim.Optimizer] containing
-        the experiment state, classifier network, and optimizer
-    """
-    logger.info(f'loading experiment checkpoint "{checkpoint_path}" ...')
-    checkpoint = torch.load(checkpoint_path, map_location=DEVICE)
-    logger.info(f'"{checkpoint_path}" experiment checkpoint loaded')
-
-    experiment = checkpoint["experiment"]
-
-    network = ProteinCodingClassifier(
-        experiment.sequence_length,
-        experiment.padding_side,
-        experiment.num_nucleobase_letters,
-        experiment.num_connections,
-        experiment.dropout_probability,
-        experiment.dna_sequence_mapper,
-    )
-    network.load_state_dict(checkpoint["network_state_dict"])
-    network.to(DEVICE)
-
-    optimizer = torch.optim.Adam(network.parameters(), lr=experiment.learning_rate)
-    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-
-    return (experiment, network, optimizer)
-
-
-def train_network(
-    network,
-    optimizer,
-    experiment,
-    training_loader,
-    validation_loader,
-):
-    tensorboard_log_dir = f"runs/{experiment.dataset_id}/{experiment.datetime}"
-    summary_writer = SummaryWriter(log_dir=tensorboard_log_dir)
-
-    max_epochs = experiment.max_epochs
-    criterion = experiment.criterion
-
-    checkpoint_path = f"{experiment.experiment_directory}/{experiment.filename}.pth"
-    logger.info(f"start training, experiment checkpoints saved at {checkpoint_path}")
-
-    path = pathlib.Path(checkpoint_path)
-    network_path = pathlib.Path(f"{path.parent}/{path.stem}_network.pth")
-    torch.save(network, network_path)
-    logger.info(f"initial raw network saved at {network_path}")
-
-    max_epochs_length = len(str(max_epochs))
-
-    num_train_batches = math.ceil(experiment.training_size / experiment.batch_size)
-    num_batches_length = len(str(num_train_batches))
-
-    if not hasattr(experiment, "average_training_losses"):
-        experiment.average_training_losses = []
-
-    if not hasattr(experiment, "average_validation_losses"):
-        experiment.average_validation_losses = []
-
-    experiment.epoch = experiment.num_complete_epochs + 1
-    epoch_times = []
-    for epoch in range(experiment.epoch, max_epochs + 1):
-        epoch_start_time = time.time()
-
-        experiment.epoch = epoch
-
-        # training
-        ########################################################################
-        training_losses = []
-        # https://torchmetrics.readthedocs.io/en/latest/pages/overview.html#metrics-and-devices
-        train_accuracy = torchmetrics.Accuracy(num_classes=2).to(DEVICE)
-
-        # set the network in training mode
-        network.train()
-
-        batch_execution_times = []
-        batch_loading_times = []
-        pre_batch_loading_time = time.time()
-        for batch_number, (inputs, labels) in enumerate(training_loader, start=1):
-            batch_start_time = time.time()
-            batch_loading_time = batch_start_time - pre_batch_loading_time
-            if batch_number < num_train_batches:
-                batch_loading_times.append(batch_loading_time)
-
-            inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
-
-            labels = labels.unsqueeze(1)
-            labels = labels.to(torch.float32)
-
-            # zero accumulated gradients
-            optimizer.zero_grad()
-
-            # forward pass
-            output = network(inputs)
-
-            # get predictions
-            predictions = network.get_predictions(output)
-
-            # compute training loss
-            training_loss = criterion(output, labels)
-            training_losses.append(training_loss.item())
-            summary_writer.add_scalar("loss/training", training_loss, epoch)
-
-            # perform back propagation
-            training_loss.backward()
-
-            # prevent the exploding gradient problem
-            nn.utils.clip_grad_norm_(network.parameters(), experiment.clip_max_norm)
-
-            # perform an optimization step
-            optimizer.step()
-
-            labels = labels.to(torch.int32)
-            batch_train_accuracy = train_accuracy(predictions, labels)
-            average_training_loss = np.average(training_losses)
-
-            batch_finish_time = time.time()
-            pre_batch_loading_time = batch_finish_time
-            batch_execution_time = batch_finish_time - batch_start_time
-            if batch_number < num_train_batches:
-                batch_execution_times.append(batch_execution_time)
-
-            train_progress = f"epoch {epoch:{max_epochs_length}} batch {batch_number:{num_batches_length}} of {num_train_batches} | average loss: {average_training_loss:.4f} | accuracy: {batch_train_accuracy:.4f} | execution: {batch_execution_time:.2f}s | loading: {batch_loading_time:.2f}s"
-            logger.info(train_progress)
-
-        experiment.num_complete_epochs += 1
-
-        average_training_loss = np.average(training_losses)
-        experiment.average_training_losses.append(average_training_loss)
-
-        # validation
-        ########################################################################
-        num_validation_batches = math.ceil(
-            experiment.validation_size / experiment.batch_size
-        )
-        num_batches_length = len(str(num_validation_batches))
-
-        validation_losses = []
-        validation_accuracy = torchmetrics.Accuracy(num_classes=2).to(DEVICE)
-
-        # disable gradient calculation
-        with torch.no_grad():
-            # set the network in evaluation mode
-            network.eval()
-            for batch_number, (inputs, labels) in enumerate(validation_loader, start=1):
-                inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
-
-                labels = labels.unsqueeze(1)
-                labels = labels.to(torch.float32)
-
-                # forward pass
-                output = network(inputs)
-
-                # get predictions
-                predictions = network.get_predictions(output)
-
-                # compute validation loss
-                validation_loss = criterion(output, labels)
-                validation_losses.append(validation_loss.item())
-                summary_writer.add_scalar("loss/validation", validation_loss, epoch)
-
-                labels = labels.to(torch.int32)
-                batch_validation_accuracy = validation_accuracy(predictions, labels)
-                average_validation_loss = np.average(validation_losses)
-
-                validation_progress = f"epoch {epoch:{max_epochs_length}} validation batch {batch_number:{num_batches_length}} of {num_validation_batches} | average loss: {average_validation_loss:.4f} | accuracy: {batch_validation_accuracy:.4f}"
-                logger.info(validation_progress)
-
-        average_validation_loss = np.average(validation_losses)
-        experiment.average_validation_losses.append(average_validation_loss)
-
-        total_validation_accuracy = validation_accuracy.compute()
-
-        average_batch_execution_time = sum(batch_execution_times) / len(
-            batch_execution_times
-        )
-        average_batch_loading_time = sum(batch_loading_times) / len(batch_loading_times)
-
-        epoch_finish_time = time.time()
-        epoch_time = epoch_finish_time - epoch_start_time
-        epoch_times.append(epoch_time)
-
-        train_progress = f"epoch {epoch:{max_epochs_length}} complete | validation loss: {average_validation_loss:.4f} | validation accuracy: {total_validation_accuracy:.4f} | time: {epoch_time:.2f}s"
-        logger.info(train_progress)
-        logger.info(
-            f"training batch average execution time: {average_batch_execution_time:.2f}s | average loading time: {average_batch_loading_time:.2f}s ({num_train_batches - 1} complete batches)"
-        )
-
-        # early stopping
-        if experiment.min_validation_loss == np.Inf:
-            experiment.min_validation_loss = average_validation_loss
-            logger.info("saving first network checkpoint...")
-            checkpoint = {
-                "experiment": experiment,
-                "network_state_dict": network.state_dict(),
-                "optimizer_state_dict": optimizer.state_dict(),
-            }
-            torch.save(checkpoint, checkpoint_path)
-
-        elif (
-            average_validation_loss
-            <= experiment.min_validation_loss - experiment.loss_delta
-        ):
-            validation_loss_decrease = (
-                experiment.min_validation_loss - average_validation_loss
-            )
-            logger.info(
-                f"validation loss decreased by {validation_loss_decrease:.5f}, saving network checkpoint..."
-            )
-
-            experiment.min_validation_loss = average_validation_loss
-            experiment.no_progress = 0
-            checkpoint = {
-                "experiment": experiment,
-                "network_state_dict": network.state_dict(),
-                "optimizer_state_dict": optimizer.state_dict(),
-            }
-            torch.save(checkpoint, checkpoint_path)
-
-        # average_validation_loss > experiment.min_validation_loss - experiment.loss_delta
-        else:
-            experiment.no_progress += 1
-
-        if experiment.no_progress == experiment.patience:
-            logger.info(
-                f"{experiment.no_progress} epochs with no validation loss improvement, stopping training"
-            )
-            summary_writer.flush()
-            summary_writer.close()
-            break
-
-    training_time = sum(epoch_times)
-    average_epoch_time = training_time / len(epoch_times)
-    logger.info(
-        f"total training time: {training_time:.2f}s | epoch average training time: {average_epoch_time:.2f}s ({epoch} epochs)"
-    )
-
-    return checkpoint_path
-
-
-def test_network(checkpoint_path):
-    """
-    Calculate test loss and generate metrics.
-    """
-    experiment, network, _optimizer = load_checkpoint(checkpoint_path)
-
-    logger.info("start testing classifier")
-    logger.info(f"experiment:\n{experiment}")
-    logger.info(f"network:\n{network}")
-
-    # get test dataloader
-    _, _, test_loader = generate_dataloaders(experiment)
-
-    criterion = experiment.criterion
-
-    num_test_batches = math.ceil(experiment.test_size / experiment.batch_size)
-    num_batches_length = len(str(num_test_batches))
-
-    test_losses = []
-    test_accuracy = torchmetrics.Accuracy(num_classes=2).to(DEVICE)
-    test_precision = torchmetrics.Precision(num_classes=2).to(DEVICE)
-    test_recall = torchmetrics.Recall(num_classes=2).to(DEVICE)
-
-    with torch.no_grad():
-        network.eval()
-
-        for batch_number, (inputs, labels) in enumerate(test_loader, start=1):
-            inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
-
-            labels = labels.unsqueeze(1)
-            labels = labels.to(torch.float32)
-
-            # forward pass
-            output = network(inputs)
-
-            # get predictions
-            predictions = network.get_predictions(output)
-
-            # calculate test loss
-            test_loss = criterion(output, labels)
-            test_losses.append(test_loss.item())
-
-            labels = labels.to(torch.int32)
-            batch_accuracy = test_accuracy(predictions, labels)
-            test_precision(predictions, labels)
-            test_recall(predictions, labels)
-
-            logger.info(
-                f"test batch {batch_number:{num_batches_length}} of {num_test_batches} | accuracy: {batch_accuracy:.4f}"
-            )
-
-    # log statistics
-    average_test_loss = np.mean(test_losses)
-    total_test_accuracy = test_accuracy.compute()
-    precision = test_precision.compute()
-    recall = test_recall.compute()
-    logger.info(
-        f"testing complete | average loss: {average_test_loss:.4f} | accuracy: {total_test_accuracy:.4f}"
-    )
-    logger.info(f"precision: {precision:.4f} | recall: {recall:.4f}")
-
-
-def log_pytorch_cuda_info():
-    """
-    Log PyTorch and CUDA info and device to be used.
-    """
-    logger.debug(f"{torch.__version__=}")
-    logger.debug(f"{DEVICE=}")
-    logger.debug(f"{torch.version.cuda=}")
-    logger.debug(f"{torch.backends.cudnn.enabled=}")
-    logger.debug(f"{torch.cuda.is_available()=}")
-
-    if torch.cuda.is_available():
-        logger.debug(f"{torch.cuda.device_count()=}")
-        logger.debug(f"{torch.cuda.get_device_properties(DEVICE)}")
 
 
 def main():
@@ -559,13 +272,8 @@ def main():
     """
     argument_parser = argparse.ArgumentParser()
     argument_parser.add_argument(
-        "--datetime",
-        help="datetime string; if not set it will be generated from the current datetime",
-    )
-    argument_parser.add_argument(
-        "-ex",
-        "--experiment_settings",
-        help="path to the experiment settings configuration file",
+        "--configuration",
+        help="path to the experiment configuration file",
     )
     argument_parser.add_argument(
         "--train", action="store_true", help="train a classifier"
@@ -574,24 +282,37 @@ def main():
 
     args = argument_parser.parse_args()
 
+    # filter warning about number of dataloader workers
+    warnings.filterwarnings(
+        "ignore",
+        ".*does not have many workers which may be a bottleneck. Consider increasing the value of the `num_workers` argument.*",
+    )
+
     # train a new classifier
-    if args.train and args.experiment_settings:
-        # read the experiment settings YAML file to a dictionary
-        with open(args.experiment_settings) as file:
-            experiment_settings = yaml.safe_load(file)
+    if args.train and args.configuration:
+        # read the experiment configuration YAML file to a dictionary
+        with open(args.configuration) as file:
+            configuration = yaml.safe_load(file)
 
-        if args.datetime is None:
-            datetime = dt.datetime.now().isoformat(sep="_", timespec="seconds")
-        else:
-            datetime = args.datetime
+        configuration = AttributeDict(configuration)
 
-        # generate new experiment
-        experiment = Experiment(experiment_settings, datetime)
+        configuration.datetime = dt.datetime.now().isoformat(sep="_", timespec="seconds")
+        configuration.logging_name = configuration.experiment_prefix
+        configuration.logging_version = f"version_{configuration.datetime}"
 
-        pathlib.Path(experiment.experiment_directory).mkdir(exist_ok=True)
+        # generate random seed if it doesn't exist
+        configuration.random_seed = configuration.get(
+            "random_seed", random.randint(1_000_000, 1_001_000)
+        )
+
+        configuration.feature_encoding = "one-hot"
+
+        configuration.experiment_directory = f"{configuration.save_directory}/{configuration.logging_name}/{configuration.logging_version}"
+        log_directory_path = pathlib.Path(configuration.experiment_directory)
+        log_directory_path.mkdir(parents=True, exist_ok=True)
 
         # create file handler and add to logger
-        log_file_path = f"{experiment.experiment_directory}/{experiment.filename}.log"
+        log_file_path = log_directory_path / "experiment.log"
         file_handler = logging.FileHandler(log_file_path, mode="a+")
         file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(logging_formatter_time_message)
@@ -600,38 +321,45 @@ def main():
         log_pytorch_cuda_info()
 
         # get training, validation, and test dataloaders
-        training_loader, validation_loader, _test_loader = generate_dataloaders(
-            experiment
-        )
+        (
+            training_dataloader,
+            validation_dataloader,
+            test_dataloader,
+        ) = generate_dataloaders(configuration)
 
         # instantiate neural network
-        network = ProteinCodingClassifier(
-            experiment.sequence_length,
-            experiment.padding_side,
-            experiment.num_nucleobase_letters,
-            experiment.num_connections,
-            experiment.dropout_probability,
-            experiment.dna_sequence_mapper,
+        network = ProteinCodingClassifier(**configuration)
+
+        tensorboard_logger = pl.loggers.TensorBoardLogger(
+            save_dir=configuration.save_directory,
+            name=configuration.logging_name,
+            version=configuration.logging_version,
+            default_hp_metric=False,
         )
-        network.to(DEVICE)
 
-        # optimization function
-        optimizer = torch.optim.Adam(network.parameters(), lr=experiment.learning_rate)
+        early_stopping_callback = pl.callbacks.early_stopping.EarlyStopping(
+            monitor="validation_loss",
+            min_delta=configuration.loss_delta,
+            patience=configuration.patience,
+            verbose=True,
+        )
 
-        logger.info("start training new classifier")
-        logger.info(f"experiment:\n{experiment}")
-        logger.info(f"network:\n{network}")
+        trainer = pl.Trainer(
+            logger=tensorboard_logger,
+            max_epochs=configuration.max_epochs,
+            log_every_n_steps=1,
+            callbacks=[early_stopping_callback],
+            profiler=configuration.profiler,
+        )
 
-        checkpoint_path = train_network(
-            network,
-            optimizer,
-            experiment,
-            training_loader,
-            validation_loader,
+        trainer.fit(
+            model=network,
+            train_dataloaders=training_dataloader,
+            val_dataloaders=validation_dataloader,
         )
 
         if args.test:
-            test_network(checkpoint_path)
+            trainer.test(ckpt_path="best", dataloaders=test_dataloader)
 
     else:
         argument_parser.print_help()

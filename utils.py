@@ -154,6 +154,18 @@ class SuppressSettingWithCopyWarning:
         pd.options.mode.chained_assignment = self.original_setting
 
 
+class AttributeDict(dict):
+    """
+    Extended dictionary accessible with dot notation.
+    """
+
+    def __getattr__(self, key):
+        return self[key]
+
+    def __setattr__(self, key, value):
+        self[key] = value
+
+
 def fasta_to_dict(fasta_file_path, separator=" "):
     """
     Read a FASTA file to a dictionary with keys the first word of each description
@@ -253,6 +265,23 @@ def sizeof_fmt(num, suffix="B"):
             return f"{num:3.1f} {unit}{suffix}"
         num /= 1024
     return f"{num:.1f} Yi{suffix}"
+
+
+def log_pytorch_cuda_info():
+    """
+    Log PyTorch and CUDA info and device to be used.
+    """
+    DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    logger.debug(f"{torch.__version__=}")
+    logger.debug(f"{DEVICE=}")
+    logger.debug(f"{torch.version.cuda=}")
+    logger.debug(f"{torch.backends.cudnn.enabled=}")
+    logger.debug(f"{torch.cuda.is_available()=}")
+
+    if torch.cuda.is_available():
+        logger.debug(f"{torch.cuda.device_count()=}")
+        logger.debug(f"{torch.cuda.get_device_properties(DEVICE)}")
 
 
 if __name__ == "__main__":
