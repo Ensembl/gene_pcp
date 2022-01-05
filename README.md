@@ -34,10 +34,10 @@ Specify parameters and hyperparameters for your experiment by editing or copying
 
 run training on a compute node
 ```
-python protein_coding_potential.py --train --test -ex <experiment settings YAML file path>
+python protein_coding_potential.py --train --test --configuration <experiment configuration YAML file path>
 
 # e.g.
-python protein_coding_potential.py --train --test -ex experiment.yaml
+python protein_coding_potential.py --train --test --configuration configuration.yaml
 ```
 
 
