@@ -297,7 +297,7 @@ def main():
         configuration = AttributeDict(configuration)
 
         configuration.datetime = dt.datetime.now().isoformat(sep="_", timespec="seconds")
-        configuration.logging_version = f"{configuration.experiment_prefix}_{configuration.datetime}"
+        configuration.logging_version = f"{configuration.experiment_prefix}_{configuration.dataset_id}_{configuration.datetime}"
 
         # generate random seed if it doesn't exist
         configuration.random_seed = configuration.get(
