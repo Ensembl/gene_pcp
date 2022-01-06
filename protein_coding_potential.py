@@ -297,8 +297,7 @@ def main():
         configuration = AttributeDict(configuration)
 
         configuration.datetime = dt.datetime.now().isoformat(sep="_", timespec="seconds")
-        configuration.logging_name = configuration.experiment_prefix
-        configuration.logging_version = f"version_{configuration.datetime}"
+        configuration.logging_version = f"{configuration.experiment_prefix}_{configuration.datetime}"
 
         # generate random seed if it doesn't exist
         configuration.random_seed = configuration.get(
@@ -307,7 +306,7 @@ def main():
 
         configuration.feature_encoding = "one-hot"
 
-        configuration.experiment_directory = f"{configuration.save_directory}/{configuration.logging_name}/{configuration.logging_version}"
+        configuration.experiment_directory = f"{configuration.save_directory}/{configuration.logging_version}"
         log_directory_path = pathlib.Path(configuration.experiment_directory)
         log_directory_path.mkdir(parents=True, exist_ok=True)
 
@@ -330,9 +329,12 @@ def main():
         # instantiate neural network
         network = ProteinCodingClassifier(**configuration)
 
+        # don't use a per-experiment subdirectory
+        logging_name = ""
+
         tensorboard_logger = pl.loggers.TensorBoardLogger(
             save_dir=configuration.save_directory,
-            name=configuration.logging_name,
+            name=logging_name,
             version=configuration.logging_version,
             default_hp_metric=False,
         )
