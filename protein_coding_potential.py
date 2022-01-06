@@ -145,8 +145,6 @@ class ProteinCodingClassifier(pl.LightningModule):
         )
 
     def on_test_start(self):
-        logger.info(f"best validation accuracy: {self.best_validation_accuracy:.4f}")
-
         # save network in TorchScript format
         experiment_directory_path = pathlib.Path(self.hparams.experiment_directory)
         torchscript_path = experiment_directory_path / "torchscript_network.pt"
@@ -177,6 +175,7 @@ class ProteinCodingClassifier(pl.LightningModule):
         precision = self.test_precision.compute()
         recall = self.test_recall.compute()
         logger.info(f"test accuracy: {test_accuracy:.4f} | precision: {precision:.4f} | recall: {recall:.4f}")
+        logger.info(f"best validation accuracy: {self.best_validation_accuracy:.4f}")
 
     def configure_optimizers(self):
         # optimization function
