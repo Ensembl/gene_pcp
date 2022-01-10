@@ -19,7 +19,7 @@
 
 
 """
-Train a coding / non-coding ORF classifier.
+Pipeline to train a coding vs non-coding ORF classifier using a multilayer perceptron architecture.
 """
 
 
@@ -56,6 +56,7 @@ class ProteinCodingClassifier(pl.LightningModule):
     """
     Neural network for protein coding or non-coding classification of DNA sequences.
     """
+
     def __init__(self, **kwargs):
         super().__init__()
 
@@ -174,7 +175,9 @@ class ProteinCodingClassifier(pl.LightningModule):
         test_accuracy = self.test_accuracy.compute()
         precision = self.test_precision.compute()
         recall = self.test_recall.compute()
-        logger.info(f"test accuracy: {test_accuracy:.4f} | precision: {precision:.4f} | recall: {recall:.4f}")
+        logger.info(
+            f"test accuracy: {test_accuracy:.4f} | precision: {precision:.4f} | recall: {recall:.4f}"
+        )
         logger.info(f"best validation accuracy: {self.best_validation_accuracy:.4f}")
 
     def configure_optimizers(self):
@@ -305,7 +308,9 @@ def main():
 
         configuration.feature_encoding = "one-hot"
 
-        configuration.experiment_directory = f"{configuration.save_directory}/{configuration.logging_version}"
+        configuration.experiment_directory = (
+            f"{configuration.save_directory}/{configuration.logging_version}"
+        )
         log_directory_path = pathlib.Path(configuration.experiment_directory)
         log_directory_path.mkdir(parents=True, exist_ok=True)
 
