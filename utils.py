@@ -60,23 +60,28 @@ logger.addHandler(console_handler)
 
 class DnaSequenceMapper:
     """
-    Class for translating DNA sequences to one-hot encoding.
+    DNA sequences translation to one-hot or label encoding.
     """
 
     def __init__(self):
         nucleobase_symbols = ["A", "C", "G", "T", "N"]
         padding_character = [" "]
 
-        self.nucleobase_letters = nucleobase_symbols + padding_character
+        self.nucleobase_letters = sorted(nucleobase_symbols + padding_character)
+
+        self.num_nucleobase_letters = len(self.nucleobase_letters)
 
         self.nucleobase_letter_to_index = {
             nucleobase_letter: index
             for index, nucleobase_letter in enumerate(self.nucleobase_letters)
         }
 
-        self.num_nucleobase_letters = len(self.nucleobase_letters)
+        self.index_to_nucleobase_letter = {
+            index: nucleobase_letter
+            for index, nucleobase_letter in enumerate(self.nucleobase_letters)
+        }
 
-    def nucleobase_to_one_hot(self, sequence):
+    def sequence_to_one_hot(self, sequence):
         sequence_indexes = [
             self.nucleobase_letter_to_index[nucleobase_letter]
             for nucleobase_letter in sequence
@@ -88,14 +93,30 @@ class DnaSequenceMapper:
 
         return one_hot_sequence
 
+    def sequence_to_label_encoding(self, sequence):
+        label_encoded_sequence = [
+            self.nucleobase_letter_to_index[nucleobase] for nucleobase in sequence
+        ]
 
-class SequenceDataset(Dataset):
+        label_encoded_sequence = torch.tensor(label_encoded_sequence, dtype=torch.int32)
+
+        return label_encoded_sequence
+
+
+class DnaSequenceDataset(Dataset):
     """
-    Custom Dataset for raw sequences.
+    DNA sequences Dataset.
     """
 
-    def __init__(self, dataset_id, sequence_length, padding_side="right"):
-        dataset = load_dataset(dataset_id)
+    def __init__(
+        self, dataset_id, sequence_length, feature_encoding, padding_side="right"
+    ):
+        self.dataset_id = dataset_id
+        self.sequence_length = sequence_length
+        self.feature_encoding = feature_encoding
+        self.padding_side = padding_side
+
+        dataset = load_dataset(self.dataset_id)
 
         # select the features and labels columns
         self.dataset = dataset[["sequence", "coding"]]
@@ -121,16 +142,25 @@ class SequenceDataset(Dataset):
         sequence = sample["sequence"]
         coding = sample["coding"]
 
-        one_hot_sequence = self.dna_sequence_mapper.nucleobase_to_one_hot(sequence)
-        # one_hot_sequence.shape: (sequence_length, num_nucleobase_letters)
-
-        # flatten sequence matrix to a vector
-        flat_one_hot_sequence = torch.flatten(one_hot_sequence)
-        # flat_one_hot_sequence.shape: (sequence_length * num_nucleobase_letters,)
-
         coding_value = int(coding)
 
-        item = flat_one_hot_sequence, coding_value
+        if self.feature_encoding == "one-hot":
+            one_hot_sequence = self.dna_sequence_mapper.sequence_to_one_hot(sequence)
+            # one_hot_sequence.shape: (sequence_length, num_nucleobase_letters)
+
+            # flatten sequence matrix to a vector
+            flat_one_hot_sequence = torch.flatten(one_hot_sequence)
+            # flat_one_hot_sequence.shape: (sequence_length * num_nucleobase_letters,)
+
+            item = flat_one_hot_sequence, coding_value
+
+        elif self.feature_encoding == "label":
+            label_encoded_sequence = self.dna_sequence_mapper.sequence_to_label_encoding(
+                sequence
+            )
+            # label_encoded_sequence.shape: (sequence_length,)
+
+            item = label_encoded_sequence, coding_value
 
         return item
 

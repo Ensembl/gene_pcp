@@ -19,7 +19,7 @@
 
 
 """
-Train a coding / non-coding ORF classifier.
+Pipeline to train a coding vs non-coding ORF classifier using a Transformer architecture.
 """
 
 
@@ -45,56 +45,177 @@ from torch.utils.data import DataLoader, random_split
 # project imports
 from utils import (
     AttributeDict,
-    SequenceDataset,
+    DnaSequenceDataset,
     log_pytorch_cuda_info,
     logger,
     logging_formatter_time_message,
 )
 
 
-class ProteinCodingClassifier(pl.LightningModule):
+class BinaryClassificationTransformer(pl.LightningModule):
+    def __init__(
+        self,
+        embedding_dimension,
+        num_heads,
+        depth,
+        sequence_length,
+        num_tokens,
+        dropout_probability,
+    ):
+        super().__init__()
+
+        self.num_tokens = num_tokens
+
+        output_size = 1
+
+        self.token_embedding = nn.Embedding(
+            num_embeddings=num_tokens, embedding_dim=embedding_dimension
+        )
+        self.position_embedding = nn.Embedding(
+            num_embeddings=sequence_length, embedding_dim=embedding_dimension
+        )
+
+        transformer_blocks = [
+            TransformerBlock(
+                embedding_dimension=embedding_dimension,
+                num_heads=num_heads,
+                dropout_probability=dropout_probability,
+            )
+            for _ in range(depth)
+        ]
+        self.transformer_blocks = nn.Sequential(*transformer_blocks)
+
+        self.final_layer = nn.Linear(embedding_dimension, output_size)
+
+    def forward(self, x):
+        # generate token embeddings
+        tokens = self.token_embedding(x)
+
+        b, t, k = tokens.size()
+
+        # generate position embeddings
+        positions = self.position_embedding(torch.arange(t))[None, :, :].expand(b, t, k)
+
+        x = tokens + positions
+
+        x = self.transformer_blocks(x)
+
+        # average-pool over dimension t
+        x = x.mean(dim=1)
+
+        x = self.final_layer(x)
+
+        x = torch.sigmoid(x)
+
+        return x
+
+
+class SelfAttention(nn.Module):
+    def __init__(self, embedding_dimension, num_heads=8):
+        super().__init__()
+
+        assert (
+            embedding_dimension % num_heads == 0
+        ), f"embedding dimension must be divisible by number of heads, got embedding_dimension: {embedding_dimension}, num_heads: {num_heads}"
+
+        self.num_heads = num_heads
+
+        k = embedding_dimension
+
+        self.to_keys = nn.Linear(k, k * num_heads, bias=False)
+        self.to_queries = nn.Linear(k, k * num_heads, bias=False)
+        self.to_values = nn.Linear(k, k * num_heads, bias=False)
+
+        self.unify_heads = nn.Linear(num_heads * k, k)
+
+    def forward(self, x):
+        b, t, k = x.size()
+        h = self.num_heads
+
+        keys = self.to_keys(x).view(b, t, h, k)
+        queries = self.to_queries(x).view(b, t, h, k)
+        values = self.to_values(x).view(b, t, h, k)
+
+        # fold heads into the batch dimension
+        keys = keys.transpose(1, 2).contiguous().view(b * h, t, k)
+        queries = queries.transpose(1, 2).contiguous().view(b * h, t, k)
+        values = values.transpose(1, 2).contiguous().view(b * h, t, k)
+
+        # get dot product of queries and keys
+        dot = torch.bmm(queries, keys.transpose(1, 2))
+        # dot.shape: (b * h, t, t)
+
+        # scale dot product
+        dot = dot / (k ** (1 / 2))
+
+        # get row-wise normalized weights
+        dot = F.softmax(dot, dim=2)
+
+        # apply the self attention to the values
+        out = torch.bmm(dot, values).view(b, h, t, k)
+
+        # swap h, t back
+        out = out.transpose(1, 2).contiguous().view(b, t, h * k)
+
+        return self.unify_heads(out)
+
+
+class TransformerBlock(nn.Module):
+    def __init__(
+        self,
+        embedding_dimension,
+        num_heads,
+        feed_forward_multiplier=4,
+        dropout_probability=0,
+    ):
+        super().__init__()
+
+        k = embedding_dimension
+
+        self.attention = SelfAttention(k, num_heads=num_heads)
+
+        self.layer_normalization_1 = nn.LayerNorm(k)
+        self.layer_normalization_2 = nn.LayerNorm(k)
+
+        self.feed_forward = nn.Sequential(
+            nn.Linear(k, feed_forward_multiplier * k),
+            nn.ReLU(),
+            nn.Linear(k * feed_forward_multiplier, k),
+            nn.Dropout(dropout_probability),
+        )
+
+    def forward(self, x):
+        x = self.layer_normalization_1(self.attention(x) + x)
+        x = self.layer_normalization_2(self.feed_forward(x) + x)
+
+        return x
+
+
+class ProteinCodingClassifier(BinaryClassificationTransformer):
     """
     Neural network for protein coding or non-coding classification of DNA sequences.
     """
-    def __init__(self, **kwargs):
-        super().__init__()
 
+    def __init__(self, **kwargs):
         self.save_hyperparameters()
 
-        self.sequence_length = self.hparams.sequence_length
-        self.padding_side = self.hparams.padding_side
+        # TODO
+        # check if needed
+        # workaround for a bug when saving network to TorchScript format
+        # self.hparams.dropout_probability = float(self.hparams.dropout_probability)
+
+        super().__init__(
+            embedding_dimension=self.hparams.embedding_dimension,
+            num_heads=self.hparams.num_heads,
+            depth=self.hparams.transformer_depth,
+            sequence_length=self.hparams.sequence_length,
+            num_tokens=self.hparams.num_nucleobase_letters,
+            dropout_probability=self.hparams.dropout_probability,
+        )
+
         self.dna_sequence_mapper = self.hparams.dna_sequence_mapper
 
-        input_size = self.sequence_length * self.hparams.num_nucleobase_letters
-        output_size = 1
-
-        self.input_layer = nn.Linear(
-            in_features=input_size, out_features=self.hparams.num_connections
-        )
-
-        # workaround for a bug when saving network to TorchScript format
-        self.hparams.dropout_probability = float(self.hparams.dropout_probability)
-
-        self.dropout = nn.Dropout(self.hparams.dropout_probability)
-        self.relu = nn.ReLU()
-
-        self.output_layer = nn.Linear(
-            in_features=self.hparams.num_connections, out_features=output_size
-        )
-
-        self.final_activation = nn.Sigmoid()
-
         self.best_validation_accuracy = 0
-
-    def forward(self, x):
-        x = self.input_layer(x)
-        x = self.dropout(x)
-        x = self.relu(x)
-        x = self.output_layer(x)
-        x = self.dropout(x)
-        x = self.final_activation(x)
-
-        return x
 
     def on_pretrain_routine_end(self):
         logger.info("start network training")
@@ -174,7 +295,9 @@ class ProteinCodingClassifier(pl.LightningModule):
         test_accuracy = self.test_accuracy.compute()
         precision = self.test_precision.compute()
         recall = self.test_recall.compute()
-        logger.info(f"test accuracy: {test_accuracy:.4f} | precision: {precision:.4f} | recall: {recall:.4f}")
+        logger.info(
+            f"test accuracy: {test_accuracy:.4f} | precision: {precision:.4f} | recall: {recall:.4f}"
+        )
         logger.info(f"best validation accuracy: {self.best_validation_accuracy:.4f}")
 
     def configure_optimizers(self):
@@ -203,9 +326,10 @@ def generate_dataloaders(configuration):
     Returns:
         tuple containing the training, validation, and test dataloaders
     """
-    dataset = SequenceDataset(
+    dataset = DnaSequenceDataset(
         dataset_id=configuration.dataset_id,
         sequence_length=configuration.sequence_length,
+        feature_encoding=configuration.feature_encoding,
         padding_side=configuration.padding_side,
     )
 
@@ -303,9 +427,11 @@ def main():
             "random_seed", random.randint(1_000_000, 1_001_000)
         )
 
-        configuration.feature_encoding = "one-hot"
+        configuration.feature_encoding = "label"
 
-        configuration.experiment_directory = f"{configuration.save_directory}/{configuration.logging_version}"
+        configuration.experiment_directory = (
+            f"{configuration.save_directory}/{configuration.logging_version}"
+        )
         log_directory_path = pathlib.Path(configuration.experiment_directory)
         log_directory_path.mkdir(parents=True, exist_ok=True)
 

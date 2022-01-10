@@ -4,7 +4,7 @@
 save_directory: experiments
 
 # experiment naming prefix
-experiment_prefix: mlp
+experiment_prefix: transformer
 
 # PyTorch random number generator initialization seed
 #random_seed: 5
@@ -26,8 +26,8 @@ validation_ratio: 0.15
 
 # features
 ################################################################################
-#sequence_length: 7549  # dataset sequences median length
-sequence_length: 29001  # dataset sequences mean length
+sequence_length: 7549  # dataset sequences median length
+#sequence_length: 29001  # dataset sequences mean length
 #sequence_length: 115019  # 29001 + 86018 : mean + 1 * standard_deviation
 
 #padding_side: left
@@ -36,13 +36,16 @@ padding_side: right
 
 # network architecture
 ################################################################################
-# number of connections between fully connected network layers
-#num_connections: 16
-#num_connections: 32
-num_connections: 64
-#num_connections: 128
-#num_connections: 256
-#num_connections: 512
+embedding_dimension: 16
+#embedding_dimension: 32
+#embedding_dimension: 64
+
+num_heads: 2
+#num_heads: 4
+#num_heads: 8
+
+transformer_depth: 1
+#transformer_depth: 2
 
 # L2 regularization parameter
 weight_decay: 0
@@ -59,9 +62,11 @@ dropout_probability: 0
 
 # training
 ################################################################################
-batch_size: 64
-#batch_size: 128
-#batch_size: 256
+batch_size: 4
+#batch_size: 8
+#batch_size: 16
+#batch_size: 32
+#batch_size: 64
 
 #num_workers: 0
 num_workers: 1
