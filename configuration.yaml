@@ -1,0 +1,94 @@
+# general
+################################################################################
+# experiment files directory
+save_directory: experiments
+
+# experiment naming prefix
+experiment_prefix: mlp
+
+# PyTorch random number generator initialization seed
+#random_seed: 5
+#random_seed: 7
+#random_seed: 11
+################################################################################
+
+# dataset
+################################################################################
+dataset_id: 1pct
+#dataset_id: 5pct
+#dataset_id: 20pct
+#dataset_id: full
+
+# training, validation, test split
+test_ratio: 0.15
+validation_ratio: 0.15
+################################################################################
+
+# features
+################################################################################
+#sequence_length: 7549  # dataset sequences median length
+sequence_length: 29001  # dataset sequences mean length
+#sequence_length: 115019  # 29001 + 86018 : mean + 1 * standard_deviation
+
+#padding_side: left
+padding_side: right
+################################################################################
+
+# network architecture
+################################################################################
+# number of connections between fully connected network layers
+#num_connections: 16
+#num_connections: 32
+num_connections: 64
+#num_connections: 128
+#num_connections: 256
+#num_connections: 512
+
+# L2 regularization parameter
+weight_decay: 0
+#weight_decay: 1.0e-5
+
+# max norm for gradient clipping
+clip_max_norm: 0
+#clip_max_norm: 5
+
+dropout_probability: 0
+#dropout_probability: 0.1
+#dropout_probability: 0.2
+################################################################################
+
+# training
+################################################################################
+batch_size: 64
+#batch_size: 128
+#batch_size: 256
+
+#num_workers: 0
+num_workers: 1
+#num_workers: 3
+#num_workers: 5
+#num_workers: 13
+
+#learning_rate: 0.001
+learning_rate: 0.0005
+#learning_rate: 0.0001
+
+# number of epochs without validation loss improvement before training stops
+patience: 3
+#patience: 5
+#patience: 7
+
+# minimum validation loss change to consider as improvement
+loss_delta: 0
+#loss_delta: 1.0e-6
+
+# maximum number of training epochs
+#max_epochs: 1
+#max_epochs: 3
+#max_epochs: 10
+max_epochs: 90
+
+profiler:
+#profiler: simple
+#profiler: pytorch
+################################################################################
