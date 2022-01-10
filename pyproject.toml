@@ -20,6 +20,7 @@ pudb = "^2021.2.2"
 jupyterlab = "^3.2.2"
 jupytext = "^1.13.1"
 matplotlib = "^3.4.3"
+pretty-errors = "^1.2.25"
 
 [tool.isort]
 profile = "black"
