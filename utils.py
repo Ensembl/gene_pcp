@@ -116,7 +116,16 @@ class DnaSequenceDataset(Dataset):
         self.feature_encoding = feature_encoding
         self.padding_side = padding_side
 
-        dataset = load_dataset(self.dataset_id)
+        if self.dataset_id == "full":
+            dataset_path = data_directory / "dataset.pickle"
+            logger.info(f"loading full dataset {dataset_path} ...")
+            dataset = pd.read_pickle(dataset_path)
+            logger.info("full dataset loaded")
+        elif self.dataset_id in ["1pct", "5pct", "20pct"]:
+            dev_dataset_path = data_directory / f"{self.dataset_id}_dataset.pickle"
+            logger.info(f"loading {self.dataset_id} dev dataset...")
+            dataset = pd.read_pickle(dev_dataset_path)
+            logger.info(f"{self.dataset_id} dev dataset loaded")
 
         # select the features and labels columns
         self.dataset = dataset[["sequence", "coding"]]
@@ -226,31 +235,6 @@ def fasta_to_dict(fasta_file_path, separator=" "):
             fasta_dict[first_word] = {"description": description, "sequence": sequence}
 
     return fasta_dict
-
-
-def load_dataset(dataset_id="full"):
-    """
-    Load the full or a dev dataset.
-
-    Args:
-        dataset_id (str): String identifier of the dataset to load.  Defaults to "full"
-            for loading the full dataset.
-    Returns:
-        pandas DataFrame containing the loaded dataset
-    """
-    if dataset_id == "full":
-        dataset_path = data_directory / "dataset.pickle"
-        logger.info(f"loading full dataset {dataset_path} ...")
-        dataset = pd.read_pickle(dataset_path)
-        logger.info("full dataset loaded")
-    else:
-        dev_dataset_path = data_directory / f"{dataset_id}_dataset.pickle"
-        dataset = pd.read_pickle(dev_dataset_path)
-        logger.info(f"loading {dataset_id} dev dataset...")
-        dataset = pd.read_pickle(dev_dataset_path)
-        logger.info(f"{dataset_id} dev dataset loaded")
-
-    return dataset
 
 
 def read_fasta_in_chunks(fasta_file_path, num_chunk_entries=1024):
