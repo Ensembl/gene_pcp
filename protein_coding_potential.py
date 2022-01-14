@@ -46,7 +46,6 @@ from torch.utils.data import DataLoader, random_split
 from utils import (
     AttributeDict,
     DnaSequenceDataset,
-    log_pytorch_cuda_info,
     logger,
     logging_formatter_time_message,
 )
@@ -439,8 +438,6 @@ def main():
         file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(logging_formatter_time_message)
         logger.addHandler(file_handler)
-
-        log_pytorch_cuda_info()
 
         # get training, validation, and test dataloaders
         (

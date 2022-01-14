@@ -297,22 +297,5 @@ def sizeof_fmt(num, suffix="B"):
     return f"{num:.1f} Yi{suffix}"
 
 
-def log_pytorch_cuda_info():
-    """
-    Log PyTorch and CUDA info and device to be used.
-    """
-    DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    logger.debug(f"{torch.__version__=}")
-    logger.debug(f"{DEVICE=}")
-    logger.debug(f"{torch.version.cuda=}")
-    logger.debug(f"{torch.backends.cudnn.enabled=}")
-    logger.debug(f"{torch.cuda.is_available()=}")
-
-    if torch.cuda.is_available():
-        logger.debug(f"{torch.cuda.device_count()=}")
-        logger.debug(f"{torch.cuda.get_device_properties(DEVICE)}")
-
-
 if __name__ == "__main__":
     print("this is a module file, import to use")
