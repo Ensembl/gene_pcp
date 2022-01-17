@@ -205,9 +205,10 @@ def generate_dataloaders(configuration):
     Returns:
         tuple containing the training, validation, and test dataloaders
     """
-    dataset = SequenceDataset(
+    dataset = DnaSequenceDataset(
         dataset_id=configuration.dataset_id,
         sequence_length=configuration.sequence_length,
+        feature_encoding=configuration.feature_encoding,
         padding_side=configuration.padding_side,
     )
 
