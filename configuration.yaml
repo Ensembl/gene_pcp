@@ -93,6 +93,9 @@ loss_delta: 0
 #max_epochs: 10
 max_epochs: 90
 
+gpus:
+#gpus: 1
+
 profiler:
 #profiler: simple
 #profiler: pytorch

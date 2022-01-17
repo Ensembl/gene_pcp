@@ -94,7 +94,8 @@ class BinaryClassificationTransformer(pl.LightningModule):
         b, t, k = tokens.size()
 
         # generate position embeddings
-        positions = self.position_embedding(torch.arange(t))[None, :, :].expand(b, t, k)
+        positions_init = torch.arange(t, device=self.device)
+        positions = self.position_embedding(positions_init)[None, :, :].expand(b, t, k)
 
         x = tokens + positions
 
@@ -228,6 +229,7 @@ class ProteinCodingClassifier(BinaryClassificationTransformer):
         labels = labels.unsqueeze(1)
         labels = labels.to(torch.float32)
 
+        # loss function
         training_loss = F.binary_cross_entropy(output, labels)
         self.log("training_loss", training_loss)
 
@@ -238,7 +240,8 @@ class ProteinCodingClassifier(BinaryClassificationTransformer):
         return training_loss
 
     def on_validation_start(self):
-        self.validation_accuracy = torchmetrics.Accuracy(num_classes=2)
+        # https://torchmetrics.readthedocs.io/en/latest/pages/overview.html#metrics-and-devices
+        self.validation_accuracy = torchmetrics.Accuracy(num_classes=2).to(self.device)
 
     def validation_step(self, batch, batch_index):
         features, labels = batch
@@ -270,9 +273,9 @@ class ProteinCodingClassifier(BinaryClassificationTransformer):
         torchscript = self.to_torchscript()
         torch.jit.save(torchscript, torchscript_path)
 
-        self.test_accuracy = torchmetrics.Accuracy(num_classes=2)
-        self.test_precision = torchmetrics.Precision(num_classes=2)
-        self.test_recall = torchmetrics.Recall(num_classes=2)
+        self.test_accuracy = torchmetrics.Accuracy(num_classes=2).to(self.device)
+        self.test_precision = torchmetrics.Precision(num_classes=2).to(self.device)
+        self.test_recall = torchmetrics.Recall(num_classes=2).to(self.device)
 
     def test_step(self, batch, batch_index):
         features, labels = batch
@@ -309,9 +312,9 @@ class ProteinCodingClassifier(BinaryClassificationTransformer):
 
     def get_predictions(self, output):
         threshold_value = 0.5
-        threshold = torch.Tensor([threshold_value])
+        threshold = torch.Tensor([threshold_value]).to(device=self.device)
 
-        predictions = (output > threshold).int()
+        predictions = (output > threshold).to(dtype=torch.int32)
         return predictions
 
 
@@ -470,6 +473,7 @@ def main():
         )
 
         trainer = pl.Trainer(
+            gpus=configuration.gpus,
             logger=tensorboard_logger,
             max_epochs=configuration.max_epochs,
             log_every_n_steps=1,
