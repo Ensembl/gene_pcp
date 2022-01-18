@@ -40,12 +40,11 @@ import torchmetrics
 import yaml
 
 from torch import nn
-from torch.utils.data import DataLoader, random_split
 
 # project imports
 from utils import (
     AttributeDict,
-    SequenceDataset,
+    generate_dataloaders,
     logger,
     logging_formatter_time_message,
 )
@@ -194,78 +193,6 @@ class ProteinCodingClassifier(pl.LightningModule):
 
         predictions = (output > threshold).int()
         return predictions
-
-
-def generate_dataloaders(configuration):
-    """
-    Generate training, validation, and test dataloaders from the dataset files.
-
-    Args:
-        configuration (AttributeDict): experiment configuration AttributeDict
-    Returns:
-        tuple containing the training, validation, and test dataloaders
-    """
-    dataset = DnaSequenceDataset(
-        dataset_id=configuration.dataset_id,
-        sequence_length=configuration.sequence_length,
-        feature_encoding=configuration.feature_encoding,
-        padding_side=configuration.padding_side,
-    )
-
-    configuration.dna_sequence_mapper = dataset.dna_sequence_mapper
-    configuration.num_nucleobase_letters = (
-        configuration.dna_sequence_mapper.num_nucleobase_letters
-    )
-
-    # calculate the training, validation, and test set size
-    dataset_size = len(dataset)
-    configuration.validation_size = int(configuration.validation_ratio * dataset_size)
-    configuration.test_size = int(configuration.test_ratio * dataset_size)
-    configuration.training_size = (
-        dataset_size - configuration.validation_size - configuration.test_size
-    )
-
-    # split dataset into training, validation, and test datasets
-    training_dataset, validation_dataset, test_dataset = random_split(
-        dataset,
-        lengths=(
-            configuration.training_size,
-            configuration.validation_size,
-            configuration.test_size,
-        ),
-        generator=torch.Generator().manual_seed(configuration.random_seed),
-    )
-
-    logger.info(
-        f"dataset split to training ({configuration.training_size}), validation ({configuration.validation_size}), and test ({configuration.test_size}) datasets"
-    )
-
-    # set the batch size equal to the size of the smallest dataset if larger than that
-    configuration.batch_size = min(
-        configuration.batch_size,
-        configuration.training_size,
-        configuration.validation_size,
-        configuration.test_size,
-    )
-
-    training_loader = DataLoader(
-        training_dataset,
-        batch_size=configuration.batch_size,
-        shuffle=True,
-        num_workers=configuration.num_workers,
-    )
-    validation_loader = DataLoader(
-        validation_dataset,
-        batch_size=configuration.batch_size,
-        num_workers=configuration.num_workers,
-    )
-    test_loader = DataLoader(
-        test_dataset,
-        batch_size=configuration.batch_size,
-        num_workers=configuration.num_workers,
-    )
-
-    return (training_loader, validation_loader, test_loader)
 
 
 def main():
