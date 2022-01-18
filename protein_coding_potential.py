@@ -403,6 +403,7 @@ def main():
         "--train", action="store_true", help="train a classifier"
     )
     argument_parser.add_argument("--test", action="store_true", help="test a classifier")
+    argument_parser.add_argument("--checkpoint", help="experiment checkpoint path")
 
     args = argument_parser.parse_args()
 
@@ -489,6 +490,22 @@ def main():
 
         if args.test:
             trainer.test(ckpt_path="best", dataloaders=test_dataloader)
+
+    # test a trained classifier
+    elif args.test and args.checkpoint:
+        # create file handler and add to logger
+        log_file_path = pathlib.Path(args.checkpoint).with_suffix(".log")
+        file_handler = logging.FileHandler(log_file_path, mode="a+")
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(logging_formatter_time_message)
+        logger.addHandler(file_handler)
+
+        network = ProteinCodingClassifier.load_from_checkpoint(args.checkpoint)
+
+        _, _, test_dataloader = generate_dataloaders(network.hparams)
+
+        trainer = pl.Trainer()
+        trainer.test(network, dataloaders=test_dataloader)
 
     else:
         argument_parser.print_help()
