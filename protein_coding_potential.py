@@ -87,6 +87,8 @@ class BinaryClassificationTransformer(pl.LightningModule):
 
         self.final_layer = nn.Linear(embedding_dimension, output_size)
 
+        self.saving_as_torchscript = False
+
     def forward(self, x):
         # generate token embeddings
         tokens = self.token_embedding(x)
@@ -94,7 +96,11 @@ class BinaryClassificationTransformer(pl.LightningModule):
         b, t, k = tokens.size()
 
         # generate position embeddings
-        positions_init = torch.arange(t, device=self.device)
+        # when saving network as TorchScript, it doesn't have the attribute "device"
+        if self.saving_as_torchscript:
+            positions_init = torch.arange(t)
+        else:
+            positions_init = torch.arange(t, device=self.device)
         positions = self.position_embedding(positions_init)[None, :, :].expand(b, t, k)
 
         x = tokens + positions
@@ -266,13 +272,19 @@ class ProteinCodingClassifier(BinaryClassificationTransformer):
             self.validation_accuracy.compute().item(),
         )
 
-    def on_test_start(self):
+    def on_train_end(self):
+        # when saving the network as TorchScript, it doesn't have the attribute "device"
+        self.saving_as_torchscript = True
+
         # save network in TorchScript format
         experiment_directory_path = pathlib.Path(self.hparams.experiment_directory)
         torchscript_path = experiment_directory_path / "torchscript_network.pt"
         torchscript = self.to_torchscript()
         torch.jit.save(torchscript, torchscript_path)
 
+        self.saving_as_torchscript = False
+
+    def on_test_start(self):
         self.test_accuracy = torchmetrics.Accuracy(num_classes=2).to(self.device)
         self.test_precision = torchmetrics.Precision(num_classes=2).to(self.device)
         self.test_recall = torchmetrics.Recall(num_classes=2).to(self.device)
