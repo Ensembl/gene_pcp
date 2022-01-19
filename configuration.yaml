@@ -46,6 +46,7 @@ num_heads: 2
 
 transformer_depth: 1
 #transformer_depth: 2
+#transformer_depth: 3
 
 # L2 regularization parameter
 weight_decay: 0
