@@ -245,7 +245,7 @@ class ProteinCodingClassifier(BinaryClassificationTransformer):
         return training_loss
 
     def on_validation_start(self):
-        # https://torchmetrics.readthedocs.io/en/latest/pages/overview.html#metrics-and-devices
+        # https://torchmetrics.readthedocs.io/en/stable/pages/overview.html#metrics-and-devices
         self.validation_accuracy = torchmetrics.Accuracy(num_classes=2).to(self.device)
 
     def validation_step(self, batch, batch_index):

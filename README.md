@@ -28,7 +28,7 @@ python dataset_generation.py --generate_datasets --coding_transcripts_path <codi
 
 ### experiment setup
 
-Specify parameters and hyperparameters for your experiment by editing or copying the `experiment.yaml` configuration file.
+Specify parameters and hyperparameters for your experiment by editing or copying the `configuration.yaml` configuration file.
 
 ### train and test a classifier
 
