@@ -355,6 +355,9 @@ def main():
         configuration.logging_version = f"{configuration.experiment_prefix}_{configuration.dataset_id}_{configuration.datetime}"
 
         # generate random seed if it doesn't exist
+        # Using the range [1_000_000, 1_001_000] for the random seed. This range contains
+        # numbers that have a good balance of 0 and 1 bits, as recommended by the PyTorch docs.
+        # https://pytorch.org/docs/stable/generated/torch.Generator.html#torch.Generator.manual_seed
         configuration.random_seed = configuration.get(
             "random_seed", random.randint(1_000_000, 1_001_000)
         )
