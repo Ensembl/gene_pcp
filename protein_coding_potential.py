@@ -200,7 +200,7 @@ class ProteinCodingClassifier(BinaryClassificationTransformer):
         self.save_hyperparameters()
 
         # workaround for a bug when saving network to TorchScript format
-        self.hparams.dropout_probability = float(self.hparams.dropout_probability)
+        # self.hparams.dropout_probability = float(self.hparams.dropout_probability)
 
         super().__init__(
             embedding_dimension=self.hparams.embedding_dimension,

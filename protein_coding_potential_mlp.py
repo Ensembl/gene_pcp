@@ -45,6 +45,7 @@ from torch import nn
 from utils import (
     AttributeDict,
     generate_dataloaders,
+    log_pytorch_cuda_info,
     logger,
     logging_formatter_time_message,
 )
@@ -72,7 +73,7 @@ class ProteinCodingClassifier(pl.LightningModule):
         )
 
         # workaround for a bug when saving network to TorchScript format
-        self.hparams.dropout_probability = float(self.hparams.dropout_probability)
+        # self.hparams.dropout_probability = float(self.hparams.dropout_probability)
 
         self.dropout = nn.Dropout(self.hparams.dropout_probability)
         self.relu = nn.ReLU()
@@ -108,6 +109,7 @@ class ProteinCodingClassifier(pl.LightningModule):
         labels = labels.unsqueeze(1)
         labels = labels.to(torch.float32)
 
+        # loss function
         training_loss = F.binary_cross_entropy(output, labels)
         self.log("training_loss", training_loss)
 
@@ -118,7 +120,8 @@ class ProteinCodingClassifier(pl.LightningModule):
         return training_loss
 
     def on_validation_start(self):
-        self.validation_accuracy = torchmetrics.Accuracy(num_classes=2)
+        # https://torchmetrics.readthedocs.io/en/stable/pages/overview.html#metrics-and-devices
+        self.validation_accuracy = torchmetrics.Accuracy(num_classes=2).to(self.device)
 
     def validation_step(self, batch, batch_index):
         features, labels = batch
@@ -143,16 +146,19 @@ class ProteinCodingClassifier(pl.LightningModule):
             self.validation_accuracy.compute().item(),
         )
 
-    def on_test_start(self):
-        # save network in TorchScript format
-        experiment_directory_path = pathlib.Path(self.hparams.experiment_directory)
-        torchscript_path = experiment_directory_path / "torchscript_network.pt"
-        torchscript = self.to_torchscript()
-        torch.jit.save(torchscript, torchscript_path)
+    def on_train_end(self):
+        # NOTE: disabling saving network to TorchScript, seems buggy
+        # save network to TorchScript format
+        # experiment_directory_path = pathlib.Path(self.hparams.experiment_directory)
+        # torchscript_path = experiment_directory_path / "torchscript_network.pt"
+        # torchscript = self.to_torchscript()
+        # torch.jit.save(torchscript, torchscript_path)
+        pass
 
-        self.test_accuracy = torchmetrics.Accuracy(num_classes=2)
-        self.test_precision = torchmetrics.Precision(num_classes=2)
-        self.test_recall = torchmetrics.Recall(num_classes=2)
+    def on_test_start(self):
+        self.test_accuracy = torchmetrics.Accuracy(num_classes=2).to(self.device)
+        self.test_precision = torchmetrics.Precision(num_classes=2).to(self.device)
+        self.test_recall = torchmetrics.Recall(num_classes=2).to(self.device)
 
     def test_step(self, batch, batch_index):
         features, labels = batch
@@ -189,9 +195,9 @@ class ProteinCodingClassifier(pl.LightningModule):
 
     def get_predictions(self, output):
         threshold_value = 0.5
-        threshold = torch.Tensor([threshold_value])
+        threshold = torch.Tensor([threshold_value]).to(device=self.device)
 
-        predictions = (output > threshold).int()
+        predictions = (output > threshold).to(dtype=torch.int32)
         return predictions
 
 
@@ -208,6 +214,7 @@ def main():
         "--train", action="store_true", help="train a classifier"
     )
     argument_parser.add_argument("--test", action="store_true", help="test a classifier")
+    argument_parser.add_argument("--checkpoint", help="experiment checkpoint path")
 
     args = argument_parser.parse_args()
 
@@ -229,6 +236,9 @@ def main():
         configuration.logging_version = f"{configuration.experiment_prefix}_{configuration.dataset_id}_{configuration.datetime}"
 
         # generate random seed if it doesn't exist
+        # Using the range [1_000_000, 1_001_000] for the random seed. This range contains
+        # numbers that have a good balance of 0 and 1 bits, as recommended by the PyTorch docs.
+        # https://pytorch.org/docs/stable/generated/torch.Generator.html#torch.Generator.manual_seed
         configuration.random_seed = configuration.get(
             "random_seed", random.randint(1_000_000, 1_001_000)
         )
@@ -247,6 +257,8 @@ def main():
         file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(logging_formatter_time_message)
         logger.addHandler(file_handler)
+
+        log_pytorch_cuda_info()
 
         # get training, validation, and test dataloaders
         (
@@ -276,6 +288,7 @@ def main():
         )
 
         trainer = pl.Trainer(
+            gpus=configuration.gpus,
             logger=tensorboard_logger,
             max_epochs=configuration.max_epochs,
             log_every_n_steps=1,
@@ -291,6 +304,22 @@ def main():
 
         if args.test:
             trainer.test(ckpt_path="best", dataloaders=test_dataloader)
+
+    # test a trained classifier
+    elif args.test and args.checkpoint:
+        # create file handler and add to logger
+        log_file_path = pathlib.Path(args.checkpoint).with_suffix(".log")
+        file_handler = logging.FileHandler(log_file_path, mode="a+")
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(logging_formatter_time_message)
+        logger.addHandler(file_handler)
+
+        network = ProteinCodingClassifier.load_from_checkpoint(args.checkpoint)
+
+        _, _, test_dataloader = generate_dataloaders(network.hparams)
+
+        trainer = pl.Trainer()
+        trainer.test(network, dataloaders=test_dataloader)
 
     else:
         argument_parser.print_help()
