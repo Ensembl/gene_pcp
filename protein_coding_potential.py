@@ -326,6 +326,10 @@ def main():
     """
     argument_parser = argparse.ArgumentParser()
     argument_parser.add_argument(
+        "--datetime",
+        help="datetime string; if set this will be used instead of generating a new one",
+    )
+    argument_parser.add_argument(
         "--configuration",
         help="path to the experiment configuration file",
     )
@@ -351,7 +355,13 @@ def main():
 
         configuration = AttributeDict(configuration)
 
-        configuration.datetime = dt.datetime.now().isoformat(sep="_", timespec="seconds")
+        if args.datetime:
+            configuration.datetime = args.datetime
+        else:
+            configuration.datetime = dt.datetime.now().isoformat(
+                sep="_", timespec="seconds"
+            )
+
         configuration.logging_version = f"{configuration.experiment_prefix}_{configuration.dataset_id}_{configuration.datetime}"
 
         # generate random seed if it doesn't exist
