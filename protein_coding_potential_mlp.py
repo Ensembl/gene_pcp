@@ -68,8 +68,10 @@ class ProteinCodingClassifier(pl.LightningModule):
         input_size = self.sequence_length * self.hparams.num_nucleobase_letters
         output_size = 1
 
+        self.num_connections = self.hparams.num_connections
+
         self.input_layer = nn.Linear(
-            in_features=input_size, out_features=self.hparams.num_connections
+            in_features=input_size, out_features=self.num_connections
         )
 
         # workaround for a bug when saving network to TorchScript format
@@ -79,7 +81,7 @@ class ProteinCodingClassifier(pl.LightningModule):
         self.relu = nn.ReLU()
 
         self.output_layer = nn.Linear(
-            in_features=self.hparams.num_connections, out_features=output_size
+            in_features=self.num_connections, out_features=output_size
         )
 
         self.final_activation = nn.Sigmoid()
