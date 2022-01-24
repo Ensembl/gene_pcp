@@ -26,8 +26,8 @@ validation_ratio: 0.15
 
 # features
 ################################################################################
-#sequence_length: 7549  # dataset sequences median length
-sequence_length: 29001  # dataset sequences mean length
+sequence_length: 7549  # dataset sequences median length
+#sequence_length: 29001  # dataset sequences mean length
 #sequence_length: 115019  # 29001 + 86018 : mean + 1 * standard_deviation
 
 #padding_side: left
@@ -86,7 +86,10 @@ loss_delta: 0
 #max_epochs: 1
 #max_epochs: 3
 #max_epochs: 10
-max_epochs: 90
+max_epochs: 100
+
+gpus:
+#gpus: 1
 
 profiler:
 #profiler: simple
