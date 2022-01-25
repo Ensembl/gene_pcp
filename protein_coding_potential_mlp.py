@@ -319,18 +319,29 @@ def main():
 
     # test a trained classifier
     elif args.test and args.checkpoint:
+        checkpoint_path = pathlib.Path(args.checkpoint)
+
+        logging_directory = checkpoint_path.with_suffix("")
+        logging_directory.mkdir(exist_ok=True)
+
         # create file handler and add to logger
-        log_file_path = pathlib.Path(args.checkpoint).with_suffix(".log")
+        log_file_path = logging_directory / f"{checkpoint_path.stem}.log"
+
         file_handler = logging.FileHandler(log_file_path, mode="a+")
         file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(logging_formatter_time_message)
         logger.addHandler(file_handler)
 
-        network = ProteinCodingClassifier.load_from_checkpoint(args.checkpoint)
+        network = ProteinCodingClassifier.load_from_checkpoint(checkpoint_path)
 
         _, _, test_dataloader = generate_dataloaders(network.hparams)
 
-        trainer = pl.Trainer()
+        tensorboard_logger = pl.loggers.TensorBoardLogger(
+            save_dir=logging_directory,
+            default_hp_metric=False,
+        )
+
+        trainer = pl.Trainer(logger=tensorboard_logger)
         trainer.test(network, dataloaders=test_dataloader)
 
     else:

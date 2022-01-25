@@ -26,6 +26,7 @@ Submit an LSF job to train or test a neural network protein coding potential cla
 # standard library imports
 import argparse
 import datetime as dt
+import importlib
 import pathlib
 import subprocess
 import sys
@@ -34,7 +35,6 @@ import sys
 import yaml
 
 # project imports
-from protein_coding_potential_mlp import ProteinCodingClassifier
 from utils import AttributeDict
 
 
@@ -43,6 +43,10 @@ def main():
     main function
     """
     argument_parser = argparse.ArgumentParser()
+    argument_parser.add_argument(
+        "--pipeline",
+        help="path to the pipeline script",
+    )
     argument_parser.add_argument(
         "--configuration",
         help="path to the experiment configuration YAML file",
@@ -70,7 +74,7 @@ def main():
     args = argument_parser.parse_args()
 
     # submit new classifier training
-    if args.configuration:
+    if args.pipeline and args.configuration:
         with open(args.configuration) as file:
             configuration = yaml.safe_load(file)
         configuration = AttributeDict(configuration)
@@ -83,7 +87,7 @@ def main():
         root_directory = configuration.save_directory
 
         pipeline_command_elements = [
-            "python protein_coding_potential_mlp.py",
+            f"python {args.pipeline}",
             f"--datetime {configuration.datetime}",
             f"--configuration {args.configuration}",
             "--train",
@@ -91,8 +95,17 @@ def main():
         ]
 
     # test a trained classifier
-    elif args.test and args.checkpoint:
+    elif args.pipeline and args.test and args.checkpoint:
         checkpoint_path = pathlib.Path(args.checkpoint)
+
+        # load classifier class from pipeline script
+        assert args.pipeline.endswith(
+            ".py"
+        ), f"pipeline should be a Python script, got {args.pipeline}"
+        pipeline_name = args.pipeline[:-3]
+        ProteinCodingClassifier = getattr(
+            importlib.import_module(pipeline_name), "ProteinCodingClassifier"
+        )
 
         network = ProteinCodingClassifier.load_from_checkpoint(checkpoint_path)
         configuration = network.hparams
@@ -103,7 +116,7 @@ def main():
         root_directory = checkpoint_path.parent
 
         pipeline_command_elements = [
-            "python protein_coding_potential_mlp.py",
+            f"python {args.pipeline}",
             f"--checkpoint {args.checkpoint}",
             "--test",
         ]
@@ -117,16 +130,19 @@ def main():
     pipeline_command = " ".join(pipeline_command_elements)
 
     # specify lower mem_limit for dev datasets jobs
-    dataset_ids_mem_limit = {"1pct": 1024, "5pct": 2048, "20pct": 8192}
+    dataset_ids_mem_limit = {"1pct": 4096, "5pct": 4096, "20pct": 8192}
 
     mem_limit = dataset_ids_mem_limit.get(dataset_id, args.mem_limit)
+
+    logging_directory = pathlib.Path(f"{root_directory}/{job_name}")
+    logging_directory.mkdir(exist_ok=True)
 
     # common job arguments
     bsub_command_elements = [
         "bsub",
         f"-M {mem_limit}",
-        f"-o {root_directory}/{job_name}/stdout.log",
-        f"-e {root_directory}/{job_name}/stderr.log",
+        f"-o {logging_directory}/stdout.log",
+        f"-e {logging_directory}/stderr.log",
     ]
 
     if args.gpu:
