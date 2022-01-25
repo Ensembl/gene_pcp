@@ -54,8 +54,8 @@ fi
 # https://sysinf.ebi.ac.uk/doku.php?id=ebi_cluster_good_computing_guide#gpu_hosts
 # https://www.ibm.com/docs/en/spectrum-lsf/10.1.0?topic=o-gpu
 
-#NUM_GPUS=1
-NUM_GPUS=2
+NUM_GPUS=1
+#NUM_GPUS=2
 #NUM_GPUS=4
 #NUM_GPUS=8
 
