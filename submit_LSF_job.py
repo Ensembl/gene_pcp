@@ -129,18 +129,13 @@ def main():
 
     pipeline_command = " ".join(pipeline_command_elements)
 
-    # specify lower mem_limit for dev datasets jobs
-    dataset_ids_mem_limit = {"1pct": 4096, "5pct": 4096, "20pct": 8192}
-
-    mem_limit = dataset_ids_mem_limit.get(dataset_id, args.mem_limit)
-
     logging_directory = pathlib.Path(f"{root_directory}/{job_name}")
     logging_directory.mkdir(exist_ok=True)
 
     # common job arguments
     bsub_command_elements = [
         "bsub",
-        f"-M {mem_limit}",
+        f"-M {args.mem_limit}",
         f"-o {logging_directory}/stdout.log",
         f"-e {logging_directory}/stderr.log",
     ]
@@ -154,15 +149,15 @@ def main():
             [
                 "-q gpu",
                 f'-gpu "num={num_gpus}:gmem={gpu_memory}:j_exclusive=yes"',
-                f"-M {mem_limit}",
-                f'-R"select[mem>{mem_limit}] rusage[mem={mem_limit}] span[hosts=1]"',
+                f"-M {args.mem_limit}",
+                f'-R"select[mem>{args.mem_limit}] rusage[mem={args.mem_limit}] span[hosts=1]"',
             ]
         )
     else:
         bsub_command_elements.extend(
             [
                 "-q production",
-                f'-R"select[mem>{mem_limit}] rusage[mem={mem_limit}]"',
+                f'-R"select[mem>{args.mem_limit}] rusage[mem={args.mem_limit}]"',
             ]
         )
 
