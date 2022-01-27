@@ -30,9 +30,9 @@ python dataset_generation.py --generate_datasets --coding_transcripts_path <codi
 
 Specify parameters and hyperparameters for your experiment by editing or copying the `configuration.yaml` configuration file.
 
-### train and test a classifier
+### train a classifier
 
-run training on a compute node
+run training directly
 ```
 python protein_coding_potential.py --train --test --configuration <experiment configuration YAML file path>
 
@@ -40,6 +40,27 @@ python protein_coding_potential.py --train --test --configuration <experiment co
 python protein_coding_potential.py --train --test --configuration configuration.yaml
 ```
 
+submit a training job on LSF
+```
+python submit_LSF_job.py --pipeline <pipeline script path> --configuration <experiment configuration file path>
+
+# e.g.
+python submit_LSF_job.py --pipeline protein_coding_potential.py --configuration configuration.yaml
+
+python submit_LSF_job.py --pipeline protein_coding_potential_mlp.py --configuration configuration_mlp.yaml
+```
+
+### test a classifier
+
+load a checkpoint and run testing directly
+```
+python protein_coding_potential.py --test --checkpoint <checkpoint path>
+```
+
+submit a testing job on LSF
+```
+python submit_LSF_job.py --pipeline <pipeline script path> --checkpoint <checkpoint path>
+```
 
 ## License
 

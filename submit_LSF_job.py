@@ -40,19 +40,13 @@ def main():
     main function
     """
     argument_parser = argparse.ArgumentParser()
-    argument_parser.add_argument(
-        "--pipeline",
-        help="path to the pipeline script",
-    )
+    argument_parser.add_argument("--pipeline", help="pipeline script path")
     argument_parser.add_argument(
         "--configuration",
-        help="path to the experiment configuration YAML file",
+        help="experiment configuration file path",
     )
     argument_parser.add_argument(
-        "--mem_limit",
-        default=16384,
-        type=int,
-        help="memory limit for all the processes that belong to the job",
+        "--mem_limit", default=16384, type=int, help="LSF job memory limit"
     )
     argument_parser.add_argument(
         "--gpu",
@@ -63,10 +57,6 @@ def main():
         "--checkpoint",
         help="path to the saved experiment checkpoint",
     )
-    argument_parser.add_argument(
-        "--train", action="store_true", help="train a classifier"
-    )
-    argument_parser.add_argument("--test", action="store_true", help="test a classifier")
 
     args = argument_parser.parse_args()
 
@@ -102,7 +92,7 @@ def main():
         ]
 
     # test a trained classifier
-    elif args.pipeline and args.test and args.checkpoint:
+    elif args.pipeline and args.checkpoint:
         pipeline_path = pathlib.Path(args.pipeline)
         checkpoint_path = pathlib.Path(args.checkpoint)
 
