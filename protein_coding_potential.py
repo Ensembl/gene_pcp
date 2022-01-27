@@ -57,6 +57,7 @@ class BinaryClassificationTransformer(pl.LightningModule):
         sequence_length,
         num_tokens,
         dropout_probability,
+        activation_function,
     ):
         super().__init__()
 
@@ -76,6 +77,7 @@ class BinaryClassificationTransformer(pl.LightningModule):
                 num_heads=num_heads,
                 feedforward_connections=feedforward_connections,
                 dropout_probability=dropout_probability,
+                activation_function=activation_function,
             )
             for _ in range(depth)
         ]
@@ -91,7 +93,9 @@ class BinaryClassificationTransformer(pl.LightningModule):
 
         # generate position embeddings
         position_embeddings_init = torch.arange(t, device=self.device)
-        position_embeddings = self.position_embedding(position_embeddings_init)[None, :, :].expand(b, t, k)
+        position_embeddings = self.position_embedding(position_embeddings_init)[
+            None, :, :
+        ].expand(b, t, k)
 
         x = token_embeddings + position_embeddings
 
@@ -163,6 +167,7 @@ class TransformerBlock(nn.Module):
         embedding_dimension,
         num_heads,
         feedforward_connections,
+        activation_function,
         dropout_probability,
     ):
         super().__init__()
@@ -170,6 +175,8 @@ class TransformerBlock(nn.Module):
         assert (
             feedforward_connections > embedding_dimension
         ), f"feed forward subnet number of connections should be larger than the embedding dimension, got {feedforward_connections=}, {embedding_dimension=}"
+
+        activation = {"relu": nn.ReLU, "gelu": nn.GELU}
 
         k = embedding_dimension
 
@@ -180,7 +187,7 @@ class TransformerBlock(nn.Module):
 
         self.feed_forward = nn.Sequential(
             nn.Linear(k, feedforward_connections),
-            nn.ReLU(),
+            activation[activation_function](),
             nn.Linear(feedforward_connections, k),
             nn.Dropout(dropout_probability),
         )
@@ -208,6 +215,7 @@ class ProteinCodingClassifier(BinaryClassificationTransformer):
             sequence_length=self.hparams.sequence_length,
             num_tokens=self.hparams.num_nucleobase_letters,
             dropout_probability=self.hparams.dropout_probability,
+            activation_function=self.hparams.activation_function,
         )
 
         self.dna_sequence_mapper = self.hparams.dna_sequence_mapper

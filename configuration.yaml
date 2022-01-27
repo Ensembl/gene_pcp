@@ -48,6 +48,9 @@ transformer_depth: 1
 #transformer_depth: 2
 #transformer_depth: 3
 
+activation_function: relu
+#activation_function: gelu
+
 feedforward_connections: 64
 #feedforward_connections: 128
 
