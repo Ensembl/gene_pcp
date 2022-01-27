@@ -59,13 +59,12 @@ class BinaryClassificationTransformer(pl.LightningModule):
     ):
         super().__init__()
 
-        self.num_tokens = num_tokens
-
         output_size = 1
 
         self.token_embedding = nn.Embedding(
             num_embeddings=num_tokens, embedding_dim=embedding_dimension
         )
+
         self.position_embedding = nn.Embedding(
             num_embeddings=sequence_length, embedding_dim=embedding_dimension
         )
@@ -84,15 +83,15 @@ class BinaryClassificationTransformer(pl.LightningModule):
 
     def forward(self, x):
         # generate token embeddings
-        tokens = self.token_embedding(x)
+        token_embeddings = self.token_embedding(x)
 
-        b, t, k = tokens.size()
+        b, t, k = token_embeddings.size()
 
         # generate position embeddings
-        positions_init = torch.arange(t, device=self.device)
-        positions = self.position_embedding(positions_init)[None, :, :].expand(b, t, k)
+        position_embeddings_init = torch.arange(t, device=self.device)
+        position_embeddings = self.position_embedding(position_embeddings_init)[None, :, :].expand(b, t, k)
 
-        x = tokens + positions
+        x = token_embeddings + position_embeddings
 
         x = self.transformer_blocks(x)
 
@@ -107,12 +106,12 @@ class BinaryClassificationTransformer(pl.LightningModule):
 
 
 class SelfAttention(nn.Module):
-    def __init__(self, embedding_dimension, num_heads=8):
+    def __init__(self, embedding_dimension, num_heads):
         super().__init__()
 
         assert (
             embedding_dimension % num_heads == 0
-        ), f"embedding dimension must be divisible by number of heads, got embedding_dimension: {embedding_dimension}, num_heads: {num_heads}"
+        ), f"embedding dimension must be divisible by number of heads, got {embedding_dimension=}, {num_heads=}"
 
         self.num_heads = num_heads
 
@@ -195,9 +194,6 @@ class ProteinCodingClassifier(BinaryClassificationTransformer):
     def __init__(self, **kwargs):
         self.save_hyperparameters()
 
-        # workaround for a bug when saving network to TorchScript format
-        # self.hparams.dropout_probability = float(self.hparams.dropout_probability)
-
         super().__init__(
             embedding_dimension=self.hparams.embedding_dimension,
             num_heads=self.hparams.num_heads,
@@ -263,6 +259,10 @@ class ProteinCodingClassifier(BinaryClassificationTransformer):
 
     def on_train_end(self):
         # NOTE: disabling saving network to TorchScript, seems buggy
+
+        # workaround for a bug when saving network to TorchScript format
+        # self.hparams.dropout_probability = float(self.hparams.dropout_probability)
+
         # save network to TorchScript format
         # experiment_directory_path = pathlib.Path(self.hparams.experiment_directory)
         # torchscript_path = experiment_directory_path / "torchscript_network.pt"
