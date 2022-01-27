@@ -53,6 +53,7 @@ class BinaryClassificationTransformer(pl.LightningModule):
         embedding_dimension,
         num_heads,
         depth,
+        feedforward_connections,
         sequence_length,
         num_tokens,
         dropout_probability,
@@ -73,6 +74,7 @@ class BinaryClassificationTransformer(pl.LightningModule):
             TransformerBlock(
                 embedding_dimension=embedding_dimension,
                 num_heads=num_heads,
+                feedforward_connections=feedforward_connections,
                 dropout_probability=dropout_probability,
             )
             for _ in range(depth)
@@ -160,10 +162,14 @@ class TransformerBlock(nn.Module):
         self,
         embedding_dimension,
         num_heads,
-        feed_forward_multiplier=4,
-        dropout_probability=0,
+        feedforward_connections,
+        dropout_probability,
     ):
         super().__init__()
+
+        assert (
+            feedforward_connections > embedding_dimension
+        ), f"feed forward subnet number of connections should be larger than the embedding dimension, got {feedforward_connections=}, {embedding_dimension=}"
 
         k = embedding_dimension
 
@@ -173,9 +179,9 @@ class TransformerBlock(nn.Module):
         self.layer_normalization_2 = nn.LayerNorm(k)
 
         self.feed_forward = nn.Sequential(
-            nn.Linear(k, feed_forward_multiplier * k),
+            nn.Linear(k, feedforward_connections),
             nn.ReLU(),
-            nn.Linear(k * feed_forward_multiplier, k),
+            nn.Linear(feedforward_connections, k),
             nn.Dropout(dropout_probability),
         )
 
@@ -198,6 +204,7 @@ class ProteinCodingClassifier(BinaryClassificationTransformer):
             embedding_dimension=self.hparams.embedding_dimension,
             num_heads=self.hparams.num_heads,
             depth=self.hparams.transformer_depth,
+            feedforward_connections=self.hparams.feedforward_connections,
             sequence_length=self.hparams.sequence_length,
             num_tokens=self.hparams.num_nucleobase_letters,
             dropout_probability=self.hparams.dropout_probability,

@@ -48,8 +48,12 @@ transformer_depth: 1
 #transformer_depth: 2
 #transformer_depth: 3
 
+feedforward_connections: 64
+#feedforward_connections: 128
+
 # L2 regularization parameter
 weight_decay: 0
+#weight_decay: 1.0e-6
 #weight_decay: 1.0e-5
 
 # max norm for gradient clipping
