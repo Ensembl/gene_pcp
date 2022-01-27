@@ -97,8 +97,8 @@ def main():
             f"python {pipeline_copy}",
             f"--datetime {datetime}",
             f"--configuration {configuration_copy}",
-            "--train",
             "--test",
+            "--train",
         ]
 
     # test a trained classifier
