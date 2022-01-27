@@ -24,6 +24,7 @@ import argparse
 import datetime as dt
 import importlib
 import pathlib
+import shutil
 import subprocess
 import sys
 
@@ -71,48 +72,63 @@ def main():
 
     # submit new classifier training
     if args.pipeline and args.configuration:
+        datetime = dt.datetime.now().isoformat(sep="_", timespec="seconds")
+
+        pipeline_path = pathlib.Path(args.pipeline)
+
         with open(args.configuration) as file:
             configuration = yaml.safe_load(file)
         configuration = AttributeDict(configuration)
 
-        configuration.datetime = dt.datetime.now().isoformat(sep="_", timespec="seconds")
-
-        dataset_id = configuration.dataset_id
-
-        job_name = f"{configuration.experiment_prefix}_{configuration.dataset_id}_{configuration.datetime}"
+        job_name = (
+            f"{configuration.experiment_prefix}_{configuration.dataset_id}_{datetime}"
+        )
         root_directory = configuration.save_directory
 
+        experiment_directory = pathlib.Path(f"{root_directory}/{job_name}")
+        experiment_directory.mkdir(exist_ok=True)
+
+        # copy pipeline script, configuration file, and dependencies
+        pipeline_copy = shutil.copy(pipeline_path, experiment_directory)
+        configuration_copy = shutil.copy(args.configuration, experiment_directory)
+        shutil.copy(pipeline_path.parent / "utils.py", experiment_directory)
+
         pipeline_command_elements = [
-            f"python {args.pipeline}",
-            f"--datetime {configuration.datetime}",
-            f"--configuration {args.configuration}",
+            f"python {pipeline_copy}",
+            f"--datetime {datetime}",
+            f"--configuration {configuration_copy}",
             "--train",
             "--test",
         ]
 
     # test a trained classifier
     elif args.pipeline and args.test and args.checkpoint:
+        pipeline_path = pathlib.Path(args.pipeline)
         checkpoint_path = pathlib.Path(args.checkpoint)
 
         # load classifier class from pipeline script
-        assert args.pipeline.endswith(
-            ".py"
+        assert (
+            pipeline_path.suffix == ".py"
         ), f"pipeline should be a Python script, got {args.pipeline}"
-        pipeline_name = args.pipeline[:-3]
+        pipeline_name = pipeline_path.with_suffix("").name
         ProteinCodingClassifier = getattr(
             importlib.import_module(pipeline_name), "ProteinCodingClassifier"
         )
 
         network = ProteinCodingClassifier.load_from_checkpoint(checkpoint_path)
-        configuration = network.hparams
-
-        dataset_id = configuration.dataset_id
 
         job_name = checkpoint_path.stem
         root_directory = checkpoint_path.parent
 
+        experiment_directory = pathlib.Path(f"{root_directory}/{job_name}")
+        experiment_directory.mkdir(exist_ok=True)
+
+        # copy pipeline script and dependencies
+        pipeline_copy = shutil.copy(pipeline_path, experiment_directory)
+        shutil.copy(pipeline_path.parent / "utils.py", experiment_directory)
+
         pipeline_command_elements = [
-            f"python {args.pipeline}",
+            f"python {pipeline_copy}",
             f"--checkpoint {args.checkpoint}",
             "--test",
         ]
@@ -125,15 +141,12 @@ def main():
 
     pipeline_command = " ".join(pipeline_command_elements)
 
-    logging_directory = pathlib.Path(f"{root_directory}/{job_name}")
-    logging_directory.mkdir(exist_ok=True)
-
     # common job arguments
     bsub_command_elements = [
         "bsub",
         f"-M {args.mem_limit}",
-        f"-o {logging_directory}/stdout.log",
-        f"-e {logging_directory}/stderr.log",
+        f"-o {experiment_directory}/stdout.log",
+        f"-e {experiment_directory}/stderr.log",
     ]
 
     if args.gpu:
