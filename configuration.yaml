@@ -7,7 +7,7 @@ save_directory: experiments
 experiment_prefix: transformer
 
 # PyTorch random number generator initialization seed
-#random_seed: 5
+random_seed: 5
 #random_seed: 7
 #random_seed: 11
 ################################################################################
@@ -54,7 +54,7 @@ activation_function: relu
 feedforward_connections: 64
 #feedforward_connections: 128
 
-# L2 regularization parameter
+# L2 regularization
 weight_decay: 0
 #weight_decay: 1.0e-6
 #weight_decay: 1.0e-5
