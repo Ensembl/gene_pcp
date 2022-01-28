@@ -28,5 +28,7 @@
 *.ipynb
 *.yaml
 
+.nfs*
+
 data
 experiments
