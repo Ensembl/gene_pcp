@@ -46,6 +46,7 @@ num_connections: 64
 
 # L2 regularization
 weight_decay: 0
+#weight_decay: 1.0e-6
 #weight_decay: 1.0e-5
 
 # max norm for gradient clipping
@@ -69,9 +70,9 @@ num_workers: 1
 #num_workers: 5
 #num_workers: 13
 
-#learning_rate: 0.001
-learning_rate: 0.0005
-#learning_rate: 0.0001
+learning_rate: 5.0e-4
+#learning_rate: 1.0e-4
+#learning_rate: 5.0e-5
 
 # number of epochs without validation loss improvement before training stops
 patience: 3
@@ -87,6 +88,7 @@ loss_delta: 0
 #max_epochs: 3
 #max_epochs: 10
 max_epochs: 100
+#max_epochs: 1000
 
 gpus:
 #gpus: 1
