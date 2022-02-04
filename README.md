@@ -61,7 +61,7 @@ python <pipeline script> --test --checkpoint <checkpoint path>
 
 submit a testing job on LSF
 ```
-python submit_LSF_job.py --test --pipeline <pipeline script> --checkpoint <checkpoint path>
+python submit_LSF_job.py --pipeline <pipeline script> --checkpoint <checkpoint path>
 ```
 
 

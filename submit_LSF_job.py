@@ -92,7 +92,7 @@ def main():
         ]
 
     # test a trained classifier
-    elif args.test and args.pipeline and args.checkpoint:
+    elif args.pipeline and args.checkpoint:
         pipeline_path = pathlib.Path(args.pipeline)
         checkpoint_path = pathlib.Path(args.checkpoint)
 
