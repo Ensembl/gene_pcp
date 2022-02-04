@@ -141,8 +141,8 @@ def main():
 
     if args.gpu:
         num_gpus = 1
-        gpu_memory = 16384  # 16 GiBs
-        # gpu_memory = 32510  # ~32 GiBs, total Tesla V100 memory
+        # gpu_memory = 16384  # 16 GiBs
+        gpu_memory = 32510  # ~32 GiBs, total Tesla V100 memory
 
         bsub_command_elements.extend(
             [
