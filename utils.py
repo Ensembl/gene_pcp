@@ -31,6 +31,7 @@ import torch
 import torch.nn.functional as F
 
 from Bio import SeqIO
+from Bio.Seq import Seq
 from torch.utils.data import DataLoader, Dataset, random_split
 
 
@@ -78,13 +79,35 @@ class DnaSequenceMapper:
         }
 
     def sequence_to_one_hot(self, sequence):
-        sequence_indexes = [
-            self.nucleobase_letter_to_index[nucleobase_letter]
-            for nucleobase_letter in sequence
-        ]
+        residues_symbols = ['A', 'R', 'N', 'D', 'C', 'Q', 'E', 'G', 'H', 'I', 'L', 'K', 'M', 'F', 'P', 'S', 'T', 'W', 'Y', 'V']
+        sequence_indexes =[]
+
+        for i in sequence:
+            sequence_translated_list = [sequence[i].split()]
+            frec = {}
+            n = 0
+
+            while sequence_translated_list:
+                triplet = sequence_translated_list[0] + sequence_translated_list[1] + sequence_translated_list[2]
+                if triplet in frec:
+                    frec[triplet] += 1
+                else:
+                    frec[triplet] = 1
+                n += 1
+                del sequence_translated_list[0]
+        
+            sequence_frecs = []
+            for combination in list(combinations(residues_symbols, 3)):
+                if frec[combination is not None:
+                    sequence_frecs.append(frec[combination]/n)
+                else:
+                    sequence_frecs.append('0')
+
+        sequence_indexes.append(sequence_frecs)
+        
         one_hot_sequence = F.one_hot(
-            torch.tensor(sequence_indexes), num_classes=self.num_nucleobase_letters
-        )
+            torch.tensor(sequence_indexes), num_classes=8000
+            )
         one_hot_sequence = one_hot_sequence.type(torch.float32)
 
         return one_hot_sequence
@@ -144,7 +167,7 @@ class DnaSequenceDataset(Dataset):
     def __getitem__(self, index):
         sample = self.dataset.iloc[index].to_dict()
 
-        sequence = sample["sequence"]
+        sequence = Seq(sample["sequence"])
         coding = sample["coding"]
 
         coding_value = int(coding)
