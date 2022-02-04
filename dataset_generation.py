@@ -159,11 +159,11 @@ def main():
         help="generate full and dev dataset dataframes saved as pickle files",
     )
     argument_parser.add_argument(
-        "--coding_transcripts_path",
+        "--coding_transcripts",
         help="coding sequences FASTA path",
     )
     argument_parser.add_argument(
-        "--non_coding_transcripts_path",
+        "--non_coding_transcripts",
         help="non-coding sequences FASTA path",
     )
 
@@ -178,12 +178,8 @@ def main():
     file_handler.setFormatter(logging_formatter_time_message)
     logger.addHandler(file_handler)
 
-    if (
-        args.generate_datasets
-        and args.coding_transcripts_path
-        and args.non_coding_transcripts_path
-    ):
-        generate_datasets(args.coding_transcripts_path, args.non_coding_transcripts_path)
+    if args.generate_datasets and args.coding_transcripts and args.non_coding_transcripts:
+        generate_datasets(args.coding_transcripts, args.non_coding_transcripts)
     else:
         print("Error: missing argument.")
         print(__doc__)
