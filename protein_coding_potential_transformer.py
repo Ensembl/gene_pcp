@@ -442,8 +442,7 @@ def main():
             val_dataloaders=validation_dataloader,
         )
 
-        if args.test:
-            trainer.test(ckpt_path="best", dataloaders=test_dataloader)
+        trainer.test(ckpt_path="best", dataloaders=test_dataloader)
 
     # test a trained classifier
     elif args.test and args.checkpoint:

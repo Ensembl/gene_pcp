@@ -34,12 +34,12 @@ Specify parameters and hyperparameters for your experiment by editing or copying
 
 run training directly
 ```
-python <pipeline script> --train --test --configuration <experiment configuration file>
+python <pipeline script> --train --configuration <experiment configuration file>
 
 # e.g.
-python protein_coding_potential_transformer.py --train --test --configuration configuration_transformer.yaml
+python protein_coding_potential_transformer.py --train --configuration configuration_transformer.yaml
 
-python protein_coding_potential_mlp.py --train --test --configuration protein_coding_potential_mlp.yaml
+python protein_coding_potential_mlp.py --train --configuration protein_coding_potential_mlp.yaml
 ```
 
 submit a training job on LSF
@@ -61,7 +61,7 @@ python <pipeline script> --test --checkpoint <checkpoint path>
 
 submit a testing job on LSF
 ```
-python submit_LSF_job.py --pipeline <pipeline script> --checkpoint <checkpoint path>
+python submit_LSF_job.py --test --pipeline <pipeline script> --checkpoint <checkpoint path>
 ```
 
 
