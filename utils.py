@@ -258,16 +258,19 @@ def generate_dataloaders(configuration):
         batch_size=configuration.batch_size,
         shuffle=True,
         num_workers=configuration.num_workers,
+        # pin_memory=torch.cuda.is_available(),
     )
     validation_loader = DataLoader(
         validation_dataset,
         batch_size=configuration.batch_size,
         num_workers=configuration.num_workers,
+        # pin_memory=torch.cuda.is_available(),
     )
     test_loader = DataLoader(
         test_dataset,
         batch_size=configuration.batch_size,
         num_workers=configuration.num_workers,
+        # pin_memory=torch.cuda.is_available(),
     )
 
     return (training_loader, validation_loader, test_loader)
