@@ -28,24 +28,26 @@ python dataset_generation.py --generate_datasets --coding_transcripts_path <codi
 
 ### experiment setup
 
-Specify parameters and hyperparameters for your experiment by editing or copying the `configuration.yaml` configuration file.
+Specify parameters and hyperparameters for your experiment by editing or copying one of the configuration YAML files.
 
 ### train a classifier
 
 run training directly
 ```
-python protein_coding_potential.py --train --test --configuration <experiment configuration YAML file path>
+python <pipeline script> --train --test --configuration <experiment configuration file>
 
 # e.g.
-python protein_coding_potential.py --train --test --configuration configuration.yaml
+python protein_coding_potential_transformer.py --train --test --configuration configuration_transformer.yaml
+
+python protein_coding_potential_mlp.py --train --test --configuration protein_coding_potential_mlp.yaml
 ```
 
 submit a training job on LSF
 ```
-python submit_LSF_job.py --pipeline <pipeline script path> --configuration <experiment configuration file path>
+python submit_LSF_job.py --pipeline <pipeline script> --configuration <experiment configuration file>
 
 # e.g.
-python submit_LSF_job.py --pipeline protein_coding_potential.py --configuration configuration.yaml
+python submit_LSF_job.py --pipeline protein_coding_potential_transformer.py --configuration configuration_transformer.yaml
 
 python submit_LSF_job.py --pipeline protein_coding_potential_mlp.py --configuration configuration_mlp.yaml
 ```
@@ -54,13 +56,14 @@ python submit_LSF_job.py --pipeline protein_coding_potential_mlp.py --configurat
 
 load a checkpoint and run testing directly
 ```
-python protein_coding_potential.py --test --checkpoint <checkpoint path>
+python <pipeline script> --test --checkpoint <checkpoint path>
 ```
 
 submit a testing job on LSF
 ```
-python submit_LSF_job.py --pipeline <pipeline script path> --checkpoint <checkpoint path>
+python submit_LSF_job.py --pipeline <pipeline script> --checkpoint <checkpoint path>
 ```
+
 
 ## License
 
