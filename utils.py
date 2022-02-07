@@ -32,6 +32,7 @@ import torch.nn.functional as F
 
 from Bio import SeqIO
 from Bio.Seq import Seq
+from itertools import permutations
 from torch.utils.data import DataLoader, Dataset, random_split
 
 
@@ -78,35 +79,33 @@ class DnaSequenceMapper:
             for index, nucleobase_letter in enumerate(self.nucleobase_letters)
         }
 
-    def sequence_to_one_hot(self, sequence):
+    def sequence_frec_to_one_hot(self, sequence):
         residues_symbols = ['A', 'R', 'N', 'D', 'C', 'Q', 'E', 'G', 'H', 'I', 'L', 'K', 'M', 'F', 'P', 'S', 'T', 'W', 'Y', 'V']
-        sequence_indexes =[]
 
-        for i in sequence:
-            sequence_translated_list = [sequence[i].split()]
-            frec = {}
-            n = 0
+        sequence_translated_list = sequence.split()
+        freq = {}
 
-            while sequence_translated_list:
-                triplet = sequence_translated_list[0] + sequence_translated_list[1] + sequence_translated_list[2]
-                if triplet in frec:
-                    frec[triplet] += 1
-                else:
-                    frec[triplet] = 1
-                n += 1
-                del sequence_translated_list[0]
+        sequence_indexes = range(0,len(sequence_translated_list)-2)
+        for index in sequence_indexes:
+            index_1 = index + 1
+            index_2 = index + 2
+            triplet = sequence_translated_list[index] + sequence_translated_list[index_1] + sequence_translated_list[index_2]
+            if triplet in frec:
+                freq[triplet] += 1
+            else:
+                freq[triplet] = 1
         
-            sequence_frecs = []
-            for combination in list(combinations(residues_symbols, 3)):
-                if frec[combination is not None:
-                    sequence_frecs.append(frec[combination]/n)
-                else:
-                    sequence_frecs.append('0')
+        triplets_frequencies = []
+        for permutation in list(permutations(residues_symbols, 3)):
+            permutation_str = permutation[0] + permutation[1] + permutation[2]
+            if freq.get(permutation_str) is not None:
+                freq_fixed = freq[permutation_str] / len(sequence_translated_list)
+                triplets_frequencies.append(freq_fixed)
+            else:
+                triplets_frequencies.append('0')
 
-        sequence_indexes.append(sequence_frecs)
-        
         one_hot_sequence = F.one_hot(
-            torch.tensor(sequence_indexes), num_classes=8000
+            torch.tensor(triplets_frequencies), num_classes=8000
             )
         one_hot_sequence = one_hot_sequence.type(torch.float32)
 
@@ -173,7 +172,7 @@ class DnaSequenceDataset(Dataset):
         coding_value = int(coding)
 
         if self.feature_encoding == "one-hot":
-            one_hot_sequence = self.dna_sequence_mapper.sequence_to_one_hot(sequence)
+            one_hot_sequence = self.dna_sequence_mapper.sequence_frec_to_one_hot(sequence)
             # one_hot_sequence.shape: (sequence_length, num_nucleobase_letters)
 
             # flatten sequence matrix to a vector
