@@ -331,6 +331,32 @@ class ProteinCodingClassifier(BinaryClassificationTransformer):
         return predictions
 
 
+def get_item_sequence_label_encoding(self, index):
+    """
+    Modularized Dataset __getitem__ method.
+
+    Generate a feature vector with the label encoded DNA sequence.
+
+    Args:
+        self (Dataset): the Dataset object that will contain __getitem__
+    Returns:
+        tuple containing the features vector and sequence coding value
+    """
+    sample = self.dataset.iloc[index].to_dict()
+
+    sequence = sample["sequence"]
+    coding = sample["coding"]
+
+    coding_value = int(coding)
+
+    label_encoded_sequence = self.dna_sequence_mapper.sequence_to_label_encoding(sequence)
+    # label_encoded_sequence.shape: (sequence_length,)
+
+    item = (label_encoded_sequence, coding_value)
+
+    return item
+
+
 def main():
     """
     main function
@@ -383,8 +409,6 @@ def main():
             "random_seed", random.randint(1_000_000, 1_001_000)
         )
 
-        configuration.feature_encoding = "label"
-
         configuration.experiment_directory = (
             f"{configuration.save_directory}/{configuration.logging_version}"
         )
@@ -405,7 +429,7 @@ def main():
             training_dataloader,
             validation_dataloader,
             test_dataloader,
-        ) = generate_dataloaders(configuration)
+        ) = generate_dataloaders(configuration, get_item_sequence_label_encoding)
 
         # instantiate neural network
         network = ProteinCodingClassifier(**configuration)
@@ -461,7 +485,9 @@ def main():
 
         network = ProteinCodingClassifier.load_from_checkpoint(checkpoint_path)
 
-        _, _, test_dataloader = generate_dataloaders(network.hparams)
+        _, _, test_dataloader = generate_dataloaders(
+            network.hparams, get_item_sequence_label_encoding
+        )
 
         tensorboard_logger = pl.loggers.TensorBoardLogger(
             save_dir=logging_directory,

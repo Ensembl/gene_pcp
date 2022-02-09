@@ -104,12 +104,10 @@ class DnaSequenceDataset(Dataset):
     DNA sequences Dataset.
     """
 
-    def __init__(
-        self, dataset_id, sequence_length, feature_encoding, padding_side="right"
-    ):
+    def __init__(self, dataset_id, sequence_length, get_item, padding_side="right"):
         self.dataset_id = dataset_id
         self.sequence_length = sequence_length
-        self.feature_encoding = feature_encoding
+        self.get_item = get_item
         self.padding_side = padding_side
 
         if self.dataset_id == "full":
@@ -142,32 +140,7 @@ class DnaSequenceDataset(Dataset):
         return len(self.dataset)
 
     def __getitem__(self, index):
-        sample = self.dataset.iloc[index].to_dict()
-
-        sequence = sample["sequence"]
-        coding = sample["coding"]
-
-        coding_value = int(coding)
-
-        if self.feature_encoding == "one-hot":
-            one_hot_sequence = self.dna_sequence_mapper.sequence_to_one_hot(sequence)
-            # one_hot_sequence.shape: (sequence_length, num_nucleobase_letters)
-
-            # flatten sequence matrix to a vector
-            flat_one_hot_sequence = torch.flatten(one_hot_sequence)
-            # flat_one_hot_sequence.shape: (sequence_length * num_nucleobase_letters,)
-
-            item = flat_one_hot_sequence, coding_value
-
-        elif self.feature_encoding == "label":
-            label_encoded_sequence = self.dna_sequence_mapper.sequence_to_label_encoding(
-                sequence
-            )
-            # label_encoded_sequence.shape: (sequence_length,)
-
-            item = label_encoded_sequence, coding_value
-
-        return item
+        return self.get_item(self, index)
 
 
 class SuppressSettingWithCopyWarning:
@@ -201,7 +174,7 @@ class AttributeDict(dict):
         self[key] = value
 
 
-def generate_dataloaders(configuration):
+def generate_dataloaders(configuration, get_item):
     """
     Generate training, validation, and test dataloaders from the dataset files.
 
@@ -213,7 +186,7 @@ def generate_dataloaders(configuration):
     dataset = DnaSequenceDataset(
         dataset_id=configuration.dataset_id,
         sequence_length=configuration.sequence_length,
-        feature_encoding=configuration.feature_encoding,
+        get_item=get_item,
         padding_side=configuration.padding_side,
     )
 
