@@ -342,7 +342,7 @@ def log_pytorch_cuda_info():
         logger.debug(f"{torch.cuda.get_device_properties(DEVICE)}")
 
 
-def prettify_confusion_matrix(confusion_matrix, labels):
+def prettify_confusion_matrix(confusion_matrix, labels, reverse_order=False):
     """
     Generate a prettified string of a confusion matrix.
 
@@ -352,6 +352,14 @@ def prettify_confusion_matrix(confusion_matrix, labels):
         confusion_matrix (Tensor): the confusion matrix 2 dimensional tensor.
         labels (list of strings): list of all labels.
     """
+    if reverse_order:
+        labels = list(reversed(labels))
+        # reverse order of labels
+        # https://pytorch.org/docs/stable/generated/torch.index_select.html
+        indexes = torch.tensor(list(reversed(range(len(labels)))))
+        confusion_matrix = torch.index_select(confusion_matrix, 0, indexes)
+        confusion_matrix = torch.index_select(confusion_matrix, 1, indexes)
+
     confusion_matrix_string = ""
 
     docs_label = "true \ predicted"
@@ -374,6 +382,9 @@ def prettify_confusion_matrix(confusion_matrix, labels):
                 column_width
             )
         confusion_matrix_string += "\n"
+
+    # remove trailing new line
+    confusion_matrix_string = confusion_matrix_string[:-1]
 
     return confusion_matrix_string
 

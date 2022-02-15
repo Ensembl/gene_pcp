@@ -323,10 +323,9 @@ class ProteinCodingClassifier(BinaryClassificationTransformer):
         confusion_matrix = self.test_confusion_matrix.compute()
         auroc = self.test_auroc.compute()
 
-        confusion_matrix_transposed = torch.transpose(confusion_matrix, 0, 1)
-        labels = ["coding", "non-coding"]
+        labels = ["non-coding", "coding"]
         confusion_matrix_string = prettify_confusion_matrix(
-            confusion_matrix_transposed, labels
+            confusion_matrix, labels, reverse_order=True
         )
 
         logger.info(
