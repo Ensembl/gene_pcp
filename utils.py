@@ -342,5 +342,41 @@ def log_pytorch_cuda_info():
         logger.debug(f"{torch.cuda.get_device_properties(DEVICE)}")
 
 
+def prettify_confusion_matrix(confusion_matrix, labels):
+    """
+    Generate a prettified string of a confusion matrix.
+
+    The true labels reside in the vertical axis, whereas the predicted labels in the horizontal axis.
+
+    Args:
+        confusion_matrix (Tensor): the confusion matrix 2 dimensional tensor.
+        labels (list of strings): list of all labels.
+    """
+    confusion_matrix_string = ""
+
+    docs_label = "true \ predicted"
+
+    # calculate printed matrix column width
+    max_label_width = max(len(label) for label in labels)
+    column_width = max(max_label_width, len(docs_label))
+
+    # matrix header
+    confusion_matrix_string += docs_label.center(column_width)
+    for label in labels:
+        confusion_matrix_string += label.center(column_width)
+    confusion_matrix_string += "\n"
+
+    # matrix rows
+    for row, label in enumerate(labels):
+        confusion_matrix_string += label.center(column_width)
+        for column in range(len(labels)):
+            confusion_matrix_string += f"{confusion_matrix[row, column]}".center(
+                column_width
+            )
+        confusion_matrix_string += "\n"
+
+    return confusion_matrix_string
+
+
 if __name__ == "__main__":
     print("this is a module file, import to use")

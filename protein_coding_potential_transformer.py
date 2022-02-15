@@ -44,6 +44,7 @@ from utils import (
     log_pytorch_cuda_info,
     logger,
     logging_formatter_time_message,
+    prettify_confusion_matrix,
 )
 
 
@@ -287,10 +288,10 @@ class ProteinCodingClassifier(BinaryClassificationTransformer):
 
     def on_test_start(self):
         self.test_accuracy = torchmetrics.Accuracy(num_classes=2).to(self.device)
-        self.test_precision = torchmetrics.Precision(
-            num_classes=2, average="weighted"
-        ).to(self.device)
-        self.test_recall = torchmetrics.Recall(num_classes=2, average="weighted").to(
+        self.test_precision = torchmetrics.Precision(num_classes=2, average=None).to(
+            self.device
+        )
+        self.test_recall = torchmetrics.Recall(num_classes=2, average=None).to(
             self.device
         )
         self.test_confusion_matrix = torchmetrics.ConfusionMatrix(num_classes=2).to(
@@ -322,11 +323,17 @@ class ProteinCodingClassifier(BinaryClassificationTransformer):
         confusion_matrix = self.test_confusion_matrix.compute()
         auroc = self.test_auroc.compute()
 
+        confusion_matrix_transposed = torch.transpose(confusion_matrix, 0, 1)
+        labels = ["coding", "non-coding"]
+        confusion_matrix_string = prettify_confusion_matrix(
+            confusion_matrix_transposed, labels
+        )
+
         logger.info(
             f"test accuracy: {test_accuracy:.4f} (best validation accuracy: {self.best_validation_accuracy:.4f})"
         )
-        logger.info(f"precision: {precision:.4f} | recall: {recall:.4f}")
-        logger.info(f"confusion matrix:\n{confusion_matrix}")
+        logger.info(f"precision: {precision[1]:.4f} | recall: {recall[1]:.4f}")
+        logger.info(f"confusion matrix:\n{confusion_matrix_string}")
         logger.info(f"AUROC: {auroc:.4f}")
 
     def configure_optimizers(self):
