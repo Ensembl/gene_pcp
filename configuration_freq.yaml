@@ -61,8 +61,8 @@ batch_size: 64
 #batch_size: 128
 #batch_size: 256
 
-#num_workers: 0
-num_workers: 1
+num_workers: 0
+  #num_workers: 1
 #num_workers: 3
 #num_workers: 5
 #num_workers: 13

@@ -79,7 +79,7 @@ class DnaSequenceMapper:
             for index, nucleobase_letter in enumerate(self.nucleobase_letters)
         }
 
-    def sequence_frec_to_one_hot(self, sequence):
+    def sequence_to_frec(self, sequence):
         residues_symbols = ['A', 'R', 'N', 'D', 'C', 'Q', 'E', 'G', 'H', 'I', 'L', 'K', 'M', 'F', 'P', 'S', 'T', 'W', 'Y', 'V']
 
         sequence_translated_list = sequence.split()
@@ -96,20 +96,20 @@ class DnaSequenceMapper:
                 freq[triplet] = 1
         
         triplets_frequencies = []
-        for permutation in list(permutations(residues_symbols, 3)):
+        possible_permutations = list(permutations(residues_symbols, 3))
+        for permutation in possible_permutations:
             permutation_str = permutation[0] + permutation[1] + permutation[2]
             if freq.get(permutation_str) is not None:
                 freq_fixed = freq[permutation_str] / len(sequence_translated_list)
                 triplets_frequencies.append(freq_fixed)
             else:
-                triplets_frequencies.append('0')
+                triplets_frequencies.append(0)
 
-        one_hot_sequence = F.one_hot(
-            torch.tensor(triplets_frequencies), num_classes=8000
-            )
-        one_hot_sequence = one_hot_sequence.type(torch.float32)
+        freq_sequence = torch.tensor(triplets_frequencies)
 
-        return one_hot_sequence
+        freq_sequence = freq_sequence.type(torch.float32)
+
+        return freq_sequence
 
     def sequence_to_label_encoding(self, sequence):
         label_encoded_sequence = [
@@ -127,12 +127,12 @@ class DnaSequenceDataset(Dataset):
     """
 
     def __init__(
-        self, dataset_id, sequence_length, feature_encoding, padding_side="right"
+        self, dataset_id, feature_encoding
     ):
         self.dataset_id = dataset_id
-        self.sequence_length = sequence_length
+        #self.sequence_length = sequence_length
         self.feature_encoding = feature_encoding
-        self.padding_side = padding_side
+        #self.padding_side = padding_side
 
         if self.dataset_id == "full":
             dataset_path = data_directory / "dataset.pickle"
@@ -149,13 +149,13 @@ class DnaSequenceDataset(Dataset):
         self.dataset = dataset[["sequence", "coding"]]
 
         # pad or truncate all sequences to size `sequence_length`
-        with SuppressSettingWithCopyWarning():
-            self.dataset["sequence"] = self.dataset["sequence"].str.pad(
-                width=sequence_length, side=padding_side, fillchar=" "
-            )
-            self.dataset["sequence"] = self.dataset["sequence"].str.slice(
-                stop=sequence_length
-            )
+        #with SuppressSettingWithCopyWarning():
+        #    self.dataset["sequence"] = self.dataset["sequence"].str.pad(
+        #        width=sequence_length, side=padding_side, fillchar=" "
+        #    )
+        #    self.dataset["sequence"] = self.dataset["sequence"].str.slice(
+        #        stop=sequence_length
+        #    )
 
         # generate DNA sequences mapper
         self.dna_sequence_mapper = DnaSequenceMapper()
@@ -171,8 +171,8 @@ class DnaSequenceDataset(Dataset):
 
         coding_value = int(coding)
 
-        if self.feature_encoding == "one-hot":
-            one_hot_sequence = self.dna_sequence_mapper.sequence_frec_to_one_hot(sequence)
+        if self.feature_encoding == "freq":
+            one_hot_sequence = self.dna_sequence_mapper.sequence_to_frec(sequence)
             # one_hot_sequence.shape: (sequence_length, num_nucleobase_letters)
 
             # flatten sequence matrix to a vector
@@ -234,9 +234,9 @@ def generate_dataloaders(configuration):
     """
     dataset = DnaSequenceDataset(
         dataset_id=configuration.dataset_id,
-        sequence_length=configuration.sequence_length,
+        #sequence_length=configuration.sequence_length,
         feature_encoding=configuration.feature_encoding,
-        padding_side=configuration.padding_side,
+        #padding_side=configuration.padding_side,
     )
 
     configuration.dna_sequence_mapper = dataset.dna_sequence_mapper
@@ -389,6 +389,53 @@ def log_pytorch_cuda_info():
     if torch.cuda.is_available():
         logger.debug(f"{torch.cuda.device_count()=}")
         logger.debug(f"{torch.cuda.get_device_properties(DEVICE)}")
+
+
+def prettify_confusion_matrix(confusion_matrix, labels, reverse_order=False):
+    """
+    Generate a prettified string of a confusion matrix.
+
+    The true labels reside in the vertical axis, whereas the predicted labels in the horizontal axis.
+
+    Args:
+        confusion_matrix (Tensor): the confusion matrix 2 dimensional tensor.
+        labels (list of strings): list of all labels.
+    """
+    if reverse_order:
+        labels = list(reversed(labels))
+        # reverse order of labels
+        # https://pytorch.org/docs/stable/generated/torch.index_select.html
+        indexes = torch.tensor(list(reversed(range(len(labels)))))
+        confusion_matrix = torch.index_select(confusion_matrix, 0, indexes)
+        confusion_matrix = torch.index_select(confusion_matrix, 1, indexes)
+
+    confusion_matrix_string = ""
+
+    docs_label = "true \ predicted"
+
+    # calculate printed matrix column width
+    max_label_width = max(len(label) for label in labels)
+    column_width = max(max_label_width, len(docs_label))
+
+    # matrix header
+    confusion_matrix_string += docs_label.center(column_width)
+    for label in labels:
+        confusion_matrix_string += label.center(column_width)
+    confusion_matrix_string += "\n"
+
+    # matrix rows
+    for row, label in enumerate(labels):
+        confusion_matrix_string += label.center(column_width)
+        for column in range(len(labels)):
+            confusion_matrix_string += f"{confusion_matrix[row, column]}".center(
+                column_width
+            )
+        confusion_matrix_string += "\n"
+
+    # remove trailing new line
+    confusion_matrix_string = confusion_matrix_string[:-1]
+
+    return confusion_matrix_string
 
 
 if __name__ == "__main__":
