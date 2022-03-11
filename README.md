@@ -41,7 +41,7 @@ python protein_coding_potential_transformer.py --train --configuration configura
 
 python protein_coding_potential_freq.py --train --configuration configuration_freq.yaml
 
-python protein_coding_potential_mlp.py --train --configuration protein_coding_potential_mlp.yaml
+python protein_coding_potential_mlp.py --train --configuration configuration_mlp.yaml
 ```
 
 submit a training job on LSF
