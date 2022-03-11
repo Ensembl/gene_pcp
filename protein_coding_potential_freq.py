@@ -37,6 +37,8 @@ import yaml
 
 from torch import nn
 
+from math import factorial
+
 # project imports
 from utils import (
     AttributeDict,
@@ -63,8 +65,8 @@ class ProteinCodingClassifier(pl.LightningModule):
         self.dna_sequence_mapper = self.hparams.dna_sequence_mapper
 
         #input_size = self.sequence_length * self.hparams.num_nucleobase_letters
-        input_size = 6840
-        #input_size = permutations(residues,self.hparams.window_size)
+        #input_size = 6840
+        input_size = int(factorial(20)/factorial(20 - self.hparams.window_length)) # 20 is "biologically hardcoded"
         output_size = 1
 
         self.num_connections = self.hparams.num_connections
