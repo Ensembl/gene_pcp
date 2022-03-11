@@ -23,6 +23,7 @@ Pipeline to train a coding vs non-coding ORF classifier using a multilayer perce
 import argparse
 import datetime as dt
 import logging
+import math
 import pathlib
 import random
 import sys
@@ -36,8 +37,6 @@ import torchmetrics
 import yaml
 
 from torch import nn
-
-from math import factorial
 
 # project imports
 from utils import (
@@ -60,14 +59,13 @@ class ProteinCodingClassifier(pl.LightningModule):
 
         self.save_hyperparameters()
 
-        # self.sequence_length = self.hparams.sequence_length
-        # self.padding_side = self.hparams.padding_side
         self.dna_sequence_mapper = self.hparams.dna_sequence_mapper
 
         # the number of residues is "biologically hardcoded"
         num_residues = 20
         input_size = int(
-            factorial(num_residues) / factorial(num_residues - self.hparams.window_length)
+            math.factorial(num_residues)
+            / math.factorial(num_residues - self.hparams.window_length)
         )
         output_size = 1
 
@@ -76,9 +74,6 @@ class ProteinCodingClassifier(pl.LightningModule):
         self.input_layer = nn.Linear(
             in_features=input_size, out_features=self.num_connections
         )
-
-        # workaround for a bug when saving network to TorchScript format
-        # self.hparams.dropout_probability = float(self.hparams.dropout_probability)
 
         self.dropout = nn.Dropout(self.hparams.dropout_probability)
         self.relu = nn.ReLU()
@@ -153,6 +148,10 @@ class ProteinCodingClassifier(pl.LightningModule):
 
     def on_train_end(self):
         # NOTE: disabling saving network to TorchScript, seems buggy
+
+        # workaround for a bug when saving network to TorchScript format
+        # self.hparams.dropout_probability = float(self.hparams.dropout_probability)
+
         # save network to TorchScript format
         # experiment_directory_path = pathlib.Path(self.hparams.experiment_directory)
         # torchscript_path = experiment_directory_path / "torchscript_network.pt"
@@ -229,11 +228,13 @@ class ProteinCodingClassifier(pl.LightningModule):
 def get_item_freq_features(self, index):
     """
     Modularized Dataset __getitem__ method.
+
     Generate a feature vector from the frequencies of all permutations of aminoacids.
+
     Args:
         self (Dataset): the Dataset object that will contain __getitem__
     Returns:
-        tuple containing the features vector
+        tuple containing the features vector and sequence coding value
     """
     sample = self.dataset.iloc[index].to_dict()
 
@@ -242,23 +243,9 @@ def get_item_freq_features(self, index):
 
     coding_value = int(coding)
 
-    if self.feature_encoding == "freq":
-        freq_sequence = self.dna_sequence_mapper.sequence_to_freq(sequence)
-        # one_hot_sequence.shape: (sequence_length, num_nucleobase_letters)
+    freq_sequence = self.dna_sequence_mapper.sequence_to_freq(sequence)
 
-        # flatten sequence matrix to a vector
-        flat_freq_sequence = torch.flatten(freq_sequence)
-        # flat_one_hot_sequence.shape: (sequence_length * num_nucleobase_letters,)
-
-        item = (flat_freq_sequence, coding_value)
-
-    elif self.feature_encoding == "label":
-        label_encoded_sequence = self.dna_sequence_mapper.sequence_to_label_encoding(
-            sequence
-        )
-        # label_encoded_sequence.shape: (sequence_length,)
-
-        item = (label_encoded_sequence, coding_value)
+    item = (freq_sequence, coding_value)
 
     return item
 
@@ -315,8 +302,6 @@ def main():
             "random_seed", random.randint(1_000_000, 1_001_000)
         )
 
-        configuration.feature_encoding = "freq"
-
         configuration.experiment_directory = (
             f"{configuration.save_directory}/{configuration.logging_version}"
         )
@@ -337,7 +322,7 @@ def main():
             training_dataloader,
             validation_dataloader,
             test_dataloader,
-        ) = generate_dataloaders(configuration)
+        ) = generate_dataloaders(configuration, get_item_freq_features)
 
         # instantiate neural network
         network = ProteinCodingClassifier(**configuration)
@@ -374,8 +359,7 @@ def main():
             val_dataloaders=validation_dataloader,
         )
 
-        if args.test:
-            trainer.test(ckpt_path="best", dataloaders=test_dataloader)
+        trainer.test(ckpt_path="best", dataloaders=test_dataloader)
 
     # test a trained classifier
     elif args.test and args.checkpoint:
@@ -394,7 +378,9 @@ def main():
 
         network = ProteinCodingClassifier.load_from_checkpoint(checkpoint_path)
 
-        _, _, test_dataloader = generate_dataloaders(network.hparams)
+        _, _, test_dataloader = generate_dataloaders(
+            network.hparams, get_item_freq_features
+        )
 
         tensorboard_logger = pl.loggers.TensorBoardLogger(
             save_dir=logging_directory,

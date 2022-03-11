@@ -77,6 +77,18 @@ class DnaSequenceMapper:
             for index, nucleobase_letter in enumerate(self.nucleobase_letters)
         }
 
+    def sequence_to_one_hot(self, sequence):
+        sequence_indexes = [
+            self.nucleobase_letter_to_index[nucleobase_letter]
+            for nucleobase_letter in sequence
+        ]
+        one_hot_sequence = F.one_hot(
+            torch.tensor(sequence_indexes), num_classes=self.num_nucleobase_letters
+        )
+        one_hot_sequence = one_hot_sequence.type(torch.float32)
+
+        return one_hot_sequence
+
     def sequence_to_freq(self, sequence):
         residues_symbols = [
             "A",
@@ -149,11 +161,9 @@ class DnaSequenceDataset(Dataset):
     DNA sequences Dataset.
     """
 
-    def __init__(self, dataset_id, feature_encoding):
-        self.dataset_id = dataset_id
-        # self.sequence_length = sequence_length
-        self.feature_encoding = feature_encoding
-        # self.padding_side = padding_side
+    def __init__(self, configuration, get_item):
+        self.dataset_id = configuration.dataset_id
+        self.get_item = get_item
 
         if self.dataset_id == "full":
             dataset_path = data_directory / "dataset.pickle"
@@ -170,13 +180,16 @@ class DnaSequenceDataset(Dataset):
         self.dataset = dataset[["sequence", "coding"]]
 
         # pad or truncate all sequences to size `sequence_length`
-        # with SuppressSettingWithCopyWarning():
-        #    self.dataset["sequence"] = self.dataset["sequence"].str.pad(
-        #        width=sequence_length, side=padding_side, fillchar=" "
-        #    )
-        #    self.dataset["sequence"] = self.dataset["sequence"].str.slice(
-        #        stop=sequence_length
-        #    )
+        if "sequence_length" in configuration:
+            self.sequence_length = configuration.sequence_length
+            self.padding_side = configuration.padding_side
+            with SuppressSettingWithCopyWarning():
+                self.dataset["sequence"] = self.dataset["sequence"].str.pad(
+                    width=self.sequence_length, side=self.padding_side, fillchar=" "
+                )
+                self.dataset["sequence"] = self.dataset["sequence"].str.slice(
+                    stop=self.sequence_length
+                )
 
         # generate DNA sequences mapper
         self.dna_sequence_mapper = DnaSequenceMapper()
@@ -219,7 +232,7 @@ class AttributeDict(dict):
         self[key] = value
 
 
-def generate_dataloaders(configuration):
+def generate_dataloaders(configuration, get_item):
     """
     Generate training, validation, and test dataloaders from the dataset files.
 
@@ -228,12 +241,7 @@ def generate_dataloaders(configuration):
     Returns:
         tuple containing the training, validation, and test dataloaders
     """
-    dataset = DnaSequenceDataset(
-        dataset_id=configuration.dataset_id,
-        # sequence_length=configuration.sequence_length,
-        feature_encoding=configuration.feature_encoding,
-        # padding_side=configuration.padding_side,
-    )
+    dataset = DnaSequenceDataset(configuration, get_item=get_item)
 
     configuration.dna_sequence_mapper = dataset.dna_sequence_mapper
     configuration.num_nucleobase_letters = (

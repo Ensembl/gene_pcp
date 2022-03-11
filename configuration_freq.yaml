@@ -26,9 +26,9 @@ validation_ratio: 0.15
 
 # features
 ################################################################################
-#window_length: 2 #
-window_length: 3 #
-#window_length: 4 #
+#window_length: 2
+window_length: 3
+#window_length: 4
 ################################################################################
 
 # network architecture
@@ -62,14 +62,14 @@ batch_size: 64
 #batch_size: 256
 
 num_workers: 0
-  #num_workers: 1
+#num_workers: 1
 #num_workers: 3
 #num_workers: 5
 #num_workers: 13
 
-learning_rate: 5.0e-4
+learning_rate: 3.0e-4
 #learning_rate: 1.0e-4
-#learning_rate: 5.0e-5
+#learning_rate: 3.0e-5
 
 # number of epochs without validation loss improvement before training stops
 patience: 3
@@ -82,8 +82,8 @@ loss_delta: 0
 
 # maximum number of training epochs
 #max_epochs: 1
-#max_epochs: 3
-max_epochs: 10
+max_epochs: 3
+#max_epochs: 10
 #max_epochs: 100
 #max_epochs: 1000
 
