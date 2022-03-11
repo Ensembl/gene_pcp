@@ -79,7 +79,7 @@ class DnaSequenceMapper:
             for index, nucleobase_letter in enumerate(self.nucleobase_letters)
         }
 
-    def sequence_to_frec(self, sequence):
+    def sequence_to_freq(self, sequence):
         residues_symbols = ['A', 'R', 'N', 'D', 'C', 'Q', 'E', 'G', 'H', 'I', 'L', 'K', 'M', 'F', 'P', 'S', 'T', 'W', 'Y', 'V']
 
         sequence_translated_list = sequence.split()
@@ -90,7 +90,7 @@ class DnaSequenceMapper:
             index_1 = index + 1
             index_2 = index + 2
             triplet = sequence_translated_list[index] + sequence_translated_list[index_1] + sequence_translated_list[index_2]
-            if triplet in frec:
+            if triplet in freq:
                 freq[triplet] += 1
             else:
                 freq[triplet] = 1
@@ -164,33 +164,7 @@ class DnaSequenceDataset(Dataset):
         return len(self.dataset)
 
     def __getitem__(self, index):
-        sample = self.dataset.iloc[index].to_dict()
-
-        sequence = Seq(sample["sequence"])
-        coding = sample["coding"]
-
-        coding_value = int(coding)
-
-        if self.feature_encoding == "freq":
-            one_hot_sequence = self.dna_sequence_mapper.sequence_to_frec(sequence)
-            # one_hot_sequence.shape: (sequence_length, num_nucleobase_letters)
-
-            # flatten sequence matrix to a vector
-            flat_one_hot_sequence = torch.flatten(one_hot_sequence)
-            # flat_one_hot_sequence.shape: (sequence_length * num_nucleobase_letters,)
-
-            item = flat_one_hot_sequence, coding_value
-
-        elif self.feature_encoding == "label":
-            label_encoded_sequence = self.dna_sequence_mapper.sequence_to_label_encoding(
-                sequence
-            )
-            # label_encoded_sequence.shape: (sequence_length,)
-
-            item = label_encoded_sequence, coding_value
-
-        return item
-
+        return self.get_item(self, index)
 
 class SuppressSettingWithCopyWarning:
     """

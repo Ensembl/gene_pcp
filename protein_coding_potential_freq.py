@@ -221,6 +221,41 @@ class ProteinCodingClassifier(pl.LightningModule):
         predictions = (output > threshold).to(dtype=torch.int32)
         return predictions
 
+def get_item_freq_features(self, index):
+    """
+    Modularized Dataset __getitem__ method.
+    Generate a feature vector from the frequencies of all permutations of aminoacids.
+    Args:
+        self (Dataset): the Dataset object that will contain __getitem__
+    Returns:
+        tuple containing the features vector
+    """
+    sample = self.dataset.iloc[index].to_dict()
+
+    sequence = sample["sequence"]
+    coding = sample["coding"]
+
+    coding_value = int(coding)
+    
+    if self.feature_encoding == "freq":
+        freq_sequence = self.dna_sequence_mapper.sequence_to_freq(sequence)
+        # one_hot_sequence.shape: (sequence_length, num_nucleobase_letters)
+
+        # flatten sequence matrix to a vector
+        flat_freq_sequence = torch.flatten(freq_sequence)
+        # flat_one_hot_sequence.shape: (sequence_length * num_nucleobase_letters,)
+
+        item = (flat_freq_sequence, coding_value)
+
+    elif self.feature_encoding == "label":
+        label_encoded_sequence = self.dna_sequence_mapper.sequence_to_label_encoding(
+            sequence
+        )
+        # label_encoded_sequence.shape: (sequence_length,)
+
+        item = (label_encoded_sequence, coding_value)
+
+    return item
 
 def main():
     """
