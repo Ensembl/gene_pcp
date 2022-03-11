@@ -104,11 +104,9 @@ class DnaSequenceDataset(Dataset):
     DNA sequences Dataset.
     """
 
-    def __init__(self, dataset_id, sequence_length, get_item, padding_side="right"):
-        self.dataset_id = dataset_id
-        self.sequence_length = sequence_length
+    def __init__(self, configuration, get_item):
+        self.dataset_id = configuration.dataset_id
         self.get_item = get_item
-        self.padding_side = padding_side
 
         if self.dataset_id == "full":
             dataset_path = data_directory / "dataset.pickle"
@@ -125,13 +123,16 @@ class DnaSequenceDataset(Dataset):
         self.dataset = dataset[["sequence", "coding"]]
 
         # pad or truncate all sequences to size `sequence_length`
-        with SuppressSettingWithCopyWarning():
-            self.dataset["sequence"] = self.dataset["sequence"].str.pad(
-                width=sequence_length, side=padding_side, fillchar=" "
-            )
-            self.dataset["sequence"] = self.dataset["sequence"].str.slice(
-                stop=sequence_length
-            )
+        if "sequence_length" in configuration:
+            self.sequence_length = configuration.sequence_length
+            self.padding_side = configuration.padding_side
+            with SuppressSettingWithCopyWarning():
+                self.dataset["sequence"] = self.dataset["sequence"].str.pad(
+                    width=self.sequence_length, side=self.padding_side, fillchar=" "
+                )
+                self.dataset["sequence"] = self.dataset["sequence"].str.slice(
+                    stop=self.sequence_length
+                )
 
         # generate DNA sequences mapper
         self.dna_sequence_mapper = DnaSequenceMapper()
@@ -183,12 +184,7 @@ def generate_dataloaders(configuration, get_item):
     Returns:
         tuple containing the training, validation, and test dataloaders
     """
-    dataset = DnaSequenceDataset(
-        dataset_id=configuration.dataset_id,
-        sequence_length=configuration.sequence_length,
-        get_item=get_item,
-        padding_side=configuration.padding_side,
-    )
+    dataset = DnaSequenceDataset(configuration, get_item=get_item)
 
     configuration.dna_sequence_mapper = dataset.dna_sequence_mapper
     configuration.num_nucleobase_letters = (
