@@ -44,6 +44,7 @@ from utils import (
     log_pytorch_cuda_info,
     logger,
     logging_formatter_time_message,
+    prettify_confusion_matrix,
 )
 
 
@@ -69,9 +70,6 @@ class ProteinCodingClassifier(pl.LightningModule):
         self.input_layer = nn.Linear(
             in_features=input_size, out_features=self.num_connections
         )
-
-        # workaround for a bug when saving network to TorchScript format
-        # self.hparams.dropout_probability = float(self.hparams.dropout_probability)
 
         self.dropout = nn.Dropout(self.hparams.dropout_probability)
         self.relu = nn.ReLU()
@@ -146,6 +144,10 @@ class ProteinCodingClassifier(pl.LightningModule):
 
     def on_train_end(self):
         # NOTE: disabling saving network to TorchScript, seems buggy
+
+        # workaround for a bug when saving network to TorchScript format
+        # self.hparams.dropout_probability = float(self.hparams.dropout_probability)
+
         # save network to TorchScript format
         # experiment_directory_path = pathlib.Path(self.hparams.experiment_directory)
         # torchscript_path = experiment_directory_path / "torchscript_network.pt"
@@ -155,8 +157,16 @@ class ProteinCodingClassifier(pl.LightningModule):
 
     def on_test_start(self):
         self.test_accuracy = torchmetrics.Accuracy(num_classes=2).to(self.device)
-        self.test_precision = torchmetrics.Precision(num_classes=2).to(self.device)
-        self.test_recall = torchmetrics.Recall(num_classes=2).to(self.device)
+        self.test_precision = torchmetrics.Precision(num_classes=2, average=None).to(
+            self.device
+        )
+        self.test_recall = torchmetrics.Recall(num_classes=2, average=None).to(
+            self.device
+        )
+        self.test_confusion_matrix = torchmetrics.ConfusionMatrix(num_classes=2).to(
+            self.device
+        )
+        self.test_auroc = torchmetrics.AUROC(num_classes=1).to(self.device)
 
     def test_step(self, batch, batch_index):
         features, labels = batch
@@ -171,16 +181,28 @@ class ProteinCodingClassifier(pl.LightningModule):
         self.test_accuracy(predictions, labels)
         self.test_precision(predictions, labels)
         self.test_recall(predictions, labels)
+        self.test_confusion_matrix(predictions, labels)
+        self.test_auroc(predictions, labels)
 
     def on_test_end(self):
         # log statistics
         test_accuracy = self.test_accuracy.compute()
         precision = self.test_precision.compute()
         recall = self.test_recall.compute()
-        logger.info(
-            f"test accuracy: {test_accuracy:.4f} | precision: {precision:.4f} | recall: {recall:.4f}"
+        confusion_matrix = self.test_confusion_matrix.compute()
+        auroc = self.test_auroc.compute()
+
+        labels = ["non-coding", "coding"]
+        confusion_matrix_string = prettify_confusion_matrix(
+            confusion_matrix, labels, reverse_order=True
         )
-        logger.info(f"best validation accuracy: {self.best_validation_accuracy:.4f}")
+
+        logger.info(
+            f"test accuracy: {test_accuracy:.4f} (best validation accuracy: {self.best_validation_accuracy:.4f})"
+        )
+        logger.info(f"precision: {precision[1]:.4f} | recall: {recall[1]:.4f}")
+        logger.info(f"confusion matrix:\n{confusion_matrix_string}")
+        logger.info(f"AUROC: {auroc:.4f}")
 
     def configure_optimizers(self):
         # optimization function
@@ -197,6 +219,36 @@ class ProteinCodingClassifier(pl.LightningModule):
 
         predictions = (output > threshold).to(dtype=torch.int32)
         return predictions
+
+
+def get_item_one_hot_features(self, index):
+    """
+    Modularized Dataset __getitem__ method.
+
+    Generate a feature vector from the flattened one-hot encoding of the DNA sequence.
+
+    Args:
+        self (Dataset): the Dataset object that will contain __getitem__
+    Returns:
+        tuple containing the features vector and sequence coding value
+    """
+    sample = self.dataset.iloc[index].to_dict()
+
+    sequence = sample["sequence"]
+    coding = sample["coding"]
+
+    coding_value = int(coding)
+
+    one_hot_sequence = self.dna_sequence_mapper.sequence_to_one_hot(sequence)
+    # one_hot_sequence.shape: (sequence_length, num_nucleobase_letters)
+
+    # flatten sequence matrix to a vector
+    flat_one_hot_sequence = torch.flatten(one_hot_sequence)
+    # flat_one_hot_sequence.shape: (sequence_length * num_nucleobase_letters,)
+
+    item = (flat_one_hot_sequence, coding_value)
+
+    return item
 
 
 def main():
@@ -251,8 +303,6 @@ def main():
             "random_seed", random.randint(1_000_000, 1_001_000)
         )
 
-        configuration.feature_encoding = "one-hot"
-
         configuration.experiment_directory = (
             f"{configuration.save_directory}/{configuration.logging_version}"
         )
@@ -273,7 +323,7 @@ def main():
             training_dataloader,
             validation_dataloader,
             test_dataloader,
-        ) = generate_dataloaders(configuration)
+        ) = generate_dataloaders(configuration, get_item_one_hot_features)
 
         # instantiate neural network
         network = ProteinCodingClassifier(**configuration)
@@ -329,7 +379,9 @@ def main():
 
         network = ProteinCodingClassifier.load_from_checkpoint(checkpoint_path)
 
-        _, _, test_dataloader = generate_dataloaders(network.hparams)
+        _, _, test_dataloader = generate_dataloaders(
+            network.hparams, get_item_one_hot_features
+        )
 
         tensorboard_logger = pl.loggers.TensorBoardLogger(
             save_dir=logging_directory,
