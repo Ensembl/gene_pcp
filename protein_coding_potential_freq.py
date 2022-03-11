@@ -64,11 +64,11 @@ class ProteinCodingClassifier(pl.LightningModule):
         # self.padding_side = self.hparams.padding_side
         self.dna_sequence_mapper = self.hparams.dna_sequence_mapper
 
-        # input_size = self.sequence_length * self.hparams.num_nucleobase_letters
-        # input_size = 6840
+        # the number of residues is "biologically hardcoded"
+        num_residues = 20
         input_size = int(
-            factorial(20) / factorial(20 - self.hparams.window_length)
-        )  # 20 is "biologically hardcoded"
+            factorial(num_residues) / factorial(num_residues - self.hparams.window_length)
+        )
         output_size = 1
 
         self.num_connections = self.hparams.num_connections
