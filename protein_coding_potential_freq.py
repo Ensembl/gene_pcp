@@ -60,13 +60,15 @@ class ProteinCodingClassifier(pl.LightningModule):
 
         self.save_hyperparameters()
 
-        #self.sequence_length = self.hparams.sequence_length
-        #self.padding_side = self.hparams.padding_side
+        # self.sequence_length = self.hparams.sequence_length
+        # self.padding_side = self.hparams.padding_side
         self.dna_sequence_mapper = self.hparams.dna_sequence_mapper
 
-        #input_size = self.sequence_length * self.hparams.num_nucleobase_letters
-        #input_size = 6840
-        input_size = int(factorial(20)/factorial(20 - self.hparams.window_length)) # 20 is "biologically hardcoded"
+        # input_size = self.sequence_length * self.hparams.num_nucleobase_letters
+        # input_size = 6840
+        input_size = int(
+            factorial(20) / factorial(20 - self.hparams.window_length)
+        )  # 20 is "biologically hardcoded"
         output_size = 1
 
         self.num_connections = self.hparams.num_connections
@@ -223,6 +225,7 @@ class ProteinCodingClassifier(pl.LightningModule):
         predictions = (output > threshold).to(dtype=torch.int32)
         return predictions
 
+
 def get_item_freq_features(self, index):
     """
     Modularized Dataset __getitem__ method.
@@ -238,7 +241,7 @@ def get_item_freq_features(self, index):
     coding = sample["coding"]
 
     coding_value = int(coding)
-    
+
     if self.feature_encoding == "freq":
         freq_sequence = self.dna_sequence_mapper.sequence_to_freq(sequence)
         # one_hot_sequence.shape: (sequence_length, num_nucleobase_letters)
@@ -258,6 +261,7 @@ def get_item_freq_features(self, index):
         item = (label_encoded_sequence, coding_value)
 
     return item
+
 
 def main():
     """

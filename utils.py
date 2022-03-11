@@ -80,21 +80,46 @@ class DnaSequenceMapper:
         }
 
     def sequence_to_freq(self, sequence):
-        residues_symbols = ['A', 'R', 'N', 'D', 'C', 'Q', 'E', 'G', 'H', 'I', 'L', 'K', 'M', 'F', 'P', 'S', 'T', 'W', 'Y', 'V']
+        residues_symbols = [
+            "A",
+            "R",
+            "N",
+            "D",
+            "C",
+            "Q",
+            "E",
+            "G",
+            "H",
+            "I",
+            "L",
+            "K",
+            "M",
+            "F",
+            "P",
+            "S",
+            "T",
+            "W",
+            "Y",
+            "V",
+        ]
 
         sequence_translated_list = sequence.split()
         freq = {}
 
-        sequence_indexes = range(0,len(sequence_translated_list)-2)
+        sequence_indexes = range(0, len(sequence_translated_list) - 2)
         for index in sequence_indexes:
             index_1 = index + 1
             index_2 = index + 2
-            triplet = sequence_translated_list[index] + sequence_translated_list[index_1] + sequence_translated_list[index_2]
+            triplet = (
+                sequence_translated_list[index]
+                + sequence_translated_list[index_1]
+                + sequence_translated_list[index_2]
+            )
             if triplet in freq:
                 freq[triplet] += 1
             else:
                 freq[triplet] = 1
-        
+
         triplets_frequencies = []
         possible_permutations = list(permutations(residues_symbols, 3))
         for permutation in possible_permutations:
@@ -126,13 +151,11 @@ class DnaSequenceDataset(Dataset):
     DNA sequences Dataset.
     """
 
-    def __init__(
-        self, dataset_id, feature_encoding
-    ):
+    def __init__(self, dataset_id, feature_encoding):
         self.dataset_id = dataset_id
-        #self.sequence_length = sequence_length
+        # self.sequence_length = sequence_length
         self.feature_encoding = feature_encoding
-        #self.padding_side = padding_side
+        # self.padding_side = padding_side
 
         if self.dataset_id == "full":
             dataset_path = data_directory / "dataset.pickle"
@@ -149,7 +172,7 @@ class DnaSequenceDataset(Dataset):
         self.dataset = dataset[["sequence", "coding"]]
 
         # pad or truncate all sequences to size `sequence_length`
-        #with SuppressSettingWithCopyWarning():
+        # with SuppressSettingWithCopyWarning():
         #    self.dataset["sequence"] = self.dataset["sequence"].str.pad(
         #        width=sequence_length, side=padding_side, fillchar=" "
         #    )
@@ -165,6 +188,7 @@ class DnaSequenceDataset(Dataset):
 
     def __getitem__(self, index):
         return self.get_item(self, index)
+
 
 class SuppressSettingWithCopyWarning:
     """
@@ -208,9 +232,9 @@ def generate_dataloaders(configuration):
     """
     dataset = DnaSequenceDataset(
         dataset_id=configuration.dataset_id,
-        #sequence_length=configuration.sequence_length,
+        # sequence_length=configuration.sequence_length,
         feature_encoding=configuration.feature_encoding,
-        #padding_side=configuration.padding_side,
+        # padding_side=configuration.padding_side,
     )
 
     configuration.dna_sequence_mapper = dataset.dna_sequence_mapper
