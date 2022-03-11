@@ -31,8 +31,6 @@ import torch
 import torch.nn.functional as F
 
 from Bio import SeqIO
-from Bio.Seq import Seq
-from itertools import permutations
 from torch.utils.data import DataLoader, Dataset, random_split
 
 
@@ -121,7 +119,7 @@ class DnaSequenceMapper:
                 freq[triplet] = 1
 
         triplets_frequencies = []
-        possible_permutations = list(permutations(residues_symbols, 3))
+        possible_permutations = list(itertools.permutations(residues_symbols, 3))
         for permutation in possible_permutations:
             permutation_str = permutation[0] + permutation[1] + permutation[2]
             if freq.get(permutation_str) is not None:
