@@ -89,6 +89,63 @@ class DnaSequenceMapper:
 
         return one_hot_sequence
 
+    def sequence_to_freq(self, sequence):
+        residues_symbols = [
+            "A",
+            "R",
+            "N",
+            "D",
+            "C",
+            "Q",
+            "E",
+            "G",
+            "H",
+            "I",
+            "L",
+            "K",
+            "M",
+            "F",
+            "P",
+            "S",
+            "T",
+            "W",
+            "Y",
+            "V",
+        ]
+
+        sequence_translated_list = sequence.split()
+        freq = {}
+
+        sequence_indexes = range(0, len(sequence_translated_list) - 2)
+        for index in sequence_indexes:
+            index_1 = index + 1
+            index_2 = index + 2
+            triplet = (
+                sequence_translated_list[index]
+                + sequence_translated_list[index_1]
+                + sequence_translated_list[index_2]
+            )
+            if triplet in freq:
+                freq[triplet] += 1
+            else:
+                freq[triplet] = 1
+
+        triplets_frequencies = []
+        possible_permutations = list(itertools.permutations(residues_symbols, 3))
+        for permutation in possible_permutations:
+            permutation_str = permutation[0] + permutation[1] + permutation[2]
+            if freq.get(permutation_str) is not None:
+                freq_fixed = freq[permutation_str] / len(sequence_translated_list)
+                triplets_frequencies.append(freq_fixed)
+            else:
+                triplets_frequencies.append(0)
+
+        freq_sequence = torch.tensor(triplets_frequencies)
+
+        freq_sequence = freq_sequence.type(torch.float32)
+
+        return freq_sequence
+
     def sequence_to_label_encoding(self, sequence):
         label_encoded_sequence = [
             self.nucleobase_letter_to_index[nucleobase] for nucleobase in sequence
