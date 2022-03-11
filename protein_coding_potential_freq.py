@@ -15,7 +15,7 @@
 
 
 """
-Pipeline to train a coding vs non-coding ORF classifier using a multilayer perceptron architecture.
+Pipeline to train a coding vs non-coding ORF classifier using the codon frequency as features.
 """
 
 
