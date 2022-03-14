@@ -39,7 +39,9 @@ python <pipeline script> --train --configuration <experiment configuration file>
 # e.g.
 python protein_coding_potential_transformer.py --train --configuration configuration_transformer.yaml
 
-python protein_coding_potential_mlp.py --train --configuration protein_coding_potential_mlp.yaml
+python protein_coding_potential_freq.py --train --configuration configuration_freq.yaml
+
+python protein_coding_potential_mlp.py --train --configuration configuration_mlp.yaml
 ```
 
 submit a training job on LSF
@@ -48,6 +50,8 @@ python submit_LSF_job.py --pipeline <pipeline script> --configuration <experimen
 
 # e.g.
 python submit_LSF_job.py --pipeline protein_coding_potential_transformer.py --configuration configuration_transformer.yaml
+
+pyahon submit_LSF_job.py --pipeline protein_coding_potential_freq.py --configuration configuration_freq.yaml
 
 python submit_LSF_job.py --pipeline protein_coding_potential_mlp.py --configuration configuration_mlp.yaml
 ```

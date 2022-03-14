@@ -44,6 +44,7 @@ from utils import (
     log_pytorch_cuda_info,
     logger,
     logging_formatter_time_message,
+    prettify_confusion_matrix,
 )
 
 
@@ -287,8 +288,16 @@ class ProteinCodingClassifier(BinaryClassificationTransformer):
 
     def on_test_start(self):
         self.test_accuracy = torchmetrics.Accuracy(num_classes=2).to(self.device)
-        self.test_precision = torchmetrics.Precision(num_classes=2).to(self.device)
-        self.test_recall = torchmetrics.Recall(num_classes=2).to(self.device)
+        self.test_precision = torchmetrics.Precision(num_classes=2, average=None).to(
+            self.device
+        )
+        self.test_recall = torchmetrics.Recall(num_classes=2, average=None).to(
+            self.device
+        )
+        self.test_confusion_matrix = torchmetrics.ConfusionMatrix(num_classes=2).to(
+            self.device
+        )
+        self.test_auroc = torchmetrics.AUROC(num_classes=1).to(self.device)
 
     def test_step(self, batch, batch_index):
         features, labels = batch
@@ -303,16 +312,28 @@ class ProteinCodingClassifier(BinaryClassificationTransformer):
         self.test_accuracy(predictions, labels)
         self.test_precision(predictions, labels)
         self.test_recall(predictions, labels)
+        self.test_confusion_matrix(predictions, labels)
+        self.test_auroc(predictions, labels)
 
     def on_test_end(self):
         # log statistics
         test_accuracy = self.test_accuracy.compute()
         precision = self.test_precision.compute()
         recall = self.test_recall.compute()
-        logger.info(
-            f"test accuracy: {test_accuracy:.4f} | precision: {precision:.4f} | recall: {recall:.4f}"
+        confusion_matrix = self.test_confusion_matrix.compute()
+        auroc = self.test_auroc.compute()
+
+        labels = ["non-coding", "coding"]
+        confusion_matrix_string = prettify_confusion_matrix(
+            confusion_matrix, labels, reverse_order=True
         )
-        logger.info(f"best validation accuracy: {self.best_validation_accuracy:.4f}")
+
+        logger.info(
+            f"test accuracy: {test_accuracy:.4f} (best validation accuracy: {self.best_validation_accuracy:.4f})"
+        )
+        logger.info(f"precision: {precision[1]:.4f} | recall: {recall[1]:.4f}")
+        logger.info(f"confusion matrix:\n{confusion_matrix_string}")
+        logger.info(f"AUROC: {auroc:.4f}")
 
     def configure_optimizers(self):
         # optimization function
@@ -329,6 +350,32 @@ class ProteinCodingClassifier(BinaryClassificationTransformer):
 
         predictions = (output > threshold).to(dtype=torch.int32)
         return predictions
+
+
+def get_item_sequence_label_encoding(self, index):
+    """
+    Modularized Dataset __getitem__ method.
+
+    Generate a feature vector with the label encoded DNA sequence.
+
+    Args:
+        self (Dataset): the Dataset object that will contain __getitem__
+    Returns:
+        tuple containing the features vector and sequence coding value
+    """
+    sample = self.dataset.iloc[index].to_dict()
+
+    sequence = sample["sequence"]
+    coding = sample["coding"]
+
+    coding_value = int(coding)
+
+    label_encoded_sequence = self.dna_sequence_mapper.sequence_to_label_encoding(sequence)
+    # label_encoded_sequence.shape: (sequence_length,)
+
+    item = (label_encoded_sequence, coding_value)
+
+    return item
 
 
 def main():
@@ -383,8 +430,6 @@ def main():
             "random_seed", random.randint(1_000_000, 1_001_000)
         )
 
-        configuration.feature_encoding = "label"
-
         configuration.experiment_directory = (
             f"{configuration.save_directory}/{configuration.logging_version}"
         )
@@ -405,7 +450,7 @@ def main():
             training_dataloader,
             validation_dataloader,
             test_dataloader,
-        ) = generate_dataloaders(configuration)
+        ) = generate_dataloaders(configuration, get_item_sequence_label_encoding)
 
         # instantiate neural network
         network = ProteinCodingClassifier(**configuration)
@@ -461,7 +506,9 @@ def main():
 
         network = ProteinCodingClassifier.load_from_checkpoint(checkpoint_path)
 
-        _, _, test_dataloader = generate_dataloaders(network.hparams)
+        _, _, test_dataloader = generate_dataloaders(
+            network.hparams, get_item_sequence_label_encoding
+        )
 
         tensorboard_logger = pl.loggers.TensorBoardLogger(
             save_dir=logging_directory,
