@@ -31,6 +31,7 @@ import torch
 import torch.nn.functional as F
 
 from Bio import SeqIO
+from Bio.Seq import Seq
 from torch.utils.data import DataLoader, Dataset, random_split
 
 
@@ -114,30 +115,10 @@ class DnaSequenceMapper:
         return one_hot_sequence
 
     def sequence_to_freq(self, sequence):
-        residues_symbols = [
-            "A",
-            "R",
-            "N",
-            "D",
-            "C",
-            "Q",
-            "E",
-            "G",
-            "H",
-            "I",
-            "L",
-            "K",
-            "M",
-            "F",
-            "P",
-            "S",
-            "T",
-            "W",
-            "Y",
-            "V",
-        ]
 
-        sequence_translated_list = sequence.split()
+        string_sequence = Seq(sequence)
+        sequence_translated = string_sequence.translate()
+        sequence_translated_list = list(sequence_translated)
         freq = {}
 
         sequence_indexes = range(0, len(sequence_translated_list) - 2)
