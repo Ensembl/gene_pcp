@@ -34,6 +34,30 @@ from Bio import SeqIO
 from torch.utils.data import DataLoader, Dataset, random_split
 
 
+translation_symbols = [
+    "A",
+    "R",
+    "N",
+    "D",
+    "C",
+    "Q",
+    "E",
+    "G",
+    "H",
+    "I",
+    "L",
+    "K",
+    "M",
+    "F",
+    "P",
+    "S",
+    "T",
+    "W",
+    "Y",
+    "V",
+    "*",
+]
+
 data_directory = pathlib.Path("data")
 
 # logging formats
@@ -131,7 +155,7 @@ class DnaSequenceMapper:
                 freq[triplet] = 1
 
         triplets_frequencies = []
-        possible_permutations = list(itertools.permutations(residues_symbols, 3))
+        possible_permutations = list(itertools.permutations(translation_symbols, 3))
         for permutation in possible_permutations:
             permutation_str = permutation[0] + permutation[1] + permutation[2]
             if freq.get(permutation_str) is not None:

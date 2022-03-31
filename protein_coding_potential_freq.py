@@ -46,6 +46,7 @@ from utils import (
     logger,
     logging_formatter_time_message,
     prettify_confusion_matrix,
+    translation_symbols,
 )
 
 
@@ -62,7 +63,7 @@ class ProteinCodingClassifier(pl.LightningModule):
         self.dna_sequence_mapper = self.hparams.dna_sequence_mapper
 
         # the number of residues is "biologically hardcoded"
-        num_residues = 20
+        num_residues = len(translation_symbols)
         input_size = int(
             math.factorial(num_residues)
             / math.factorial(num_residues - self.hparams.window_length)
