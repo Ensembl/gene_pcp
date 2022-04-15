@@ -20,12 +20,14 @@ Project module with general definitions and statements.
 
 
 # standard library imports
+import collections
 import itertools
 import logging
 import pathlib
 import sys
 
 # third party imports
+import Bio
 import pandas as pd
 import torch
 import torch.nn.functional as F
@@ -53,6 +55,8 @@ console_handler.setLevel(logging.DEBUG)
 console_handler.setFormatter(logging_formatter_time_message)
 logger.addHandler(console_handler)
 
+protein_letters = Bio.Data.IUPACData.protein_letters
+
 
 class DnaSequenceMapper:
     """
@@ -77,6 +81,17 @@ class DnaSequenceMapper:
             for index, nucleobase_letter in enumerate(self.nucleobase_letters)
         }
 
+        # NOTE
+        # should be read from configuration file / hparams
+        self.ngram_length = 3
+
+        self.protein_letter_ngrams = [
+            str.join("", product)
+            for product in itertools.product(protein_letters, repeat=self.ngram_length)
+        ]
+        self.num_protein_letter_ngrams = len(self.protein_letter_ngrams)
+        assert self.num_protein_letter_ngrams == len(protein_letters) ** self.ngram_length
+
     def sequence_to_one_hot(self, sequence):
         sequence_indexes = [
             self.nucleobase_letter_to_index[nucleobase_letter]
@@ -89,62 +104,40 @@ class DnaSequenceMapper:
 
         return one_hot_sequence
 
-    def sequence_to_freq(self, sequence):
-        residues_symbols = [
-            "A",
-            "R",
-            "N",
-            "D",
-            "C",
-            "Q",
-            "E",
-            "G",
-            "H",
-            "I",
-            "L",
-            "K",
-            "M",
-            "F",
-            "P",
-            "S",
-            "T",
-            "W",
-            "Y",
-            "V",
+    def sequence_to_frequencies(self, sequence):
+        # NOTE
+        # The algorithm is not time or space optimized algorithm, but instead focuses on
+        # being conceptually clear.
+
+        # save all sequence ngrams
+        sequence_ngrams = [
+            sequence[index : index + self.ngram_length]
+            for index in range(len(sequence) - (self.ngram_length - 1))
         ]
 
-        sequence_translated_list = sequence.split()
-        freq = {}
+        num_sequence_ngrams = len(sequence_ngrams)
 
-        sequence_indexes = range(0, len(sequence_translated_list) - 2)
-        for index in sequence_indexes:
-            index_1 = index + 1
-            index_2 = index + 2
-            triplet = (
-                sequence_translated_list[index]
-                + sequence_translated_list[index_1]
-                + sequence_translated_list[index_2]
-            )
-            if triplet in freq:
-                freq[triplet] += 1
-            else:
-                freq[triplet] = 1
+        # count instances of sequence ngrams
+        sequence_ngram_counts = collections.Counter(sequence_ngrams)
 
-        triplets_frequencies = []
-        possible_permutations = list(itertools.permutations(residues_symbols, 3))
-        for permutation in possible_permutations:
-            permutation_str = permutation[0] + permutation[1] + permutation[2]
-            if freq.get(permutation_str) is not None:
-                freq_fixed = freq[permutation_str] / len(sequence_translated_list)
-                triplets_frequencies.append(freq_fixed)
-            else:
-                triplets_frequencies.append(0)
+        # save counts of all protein letter ngrams in the sequence
+        protein_letter_ngram_counts = {
+            ngram: sequence_ngram_counts.get(ngram, 0)
+            for ngram in self.protein_letter_ngrams
+        }
 
-        freq_sequence = torch.tensor(triplets_frequencies)
+        # calculate the relative frequency of protein letter ngrams in the sequence
+        protein_letter_ngram_frequencies = {
+            ngram: count / num_sequence_ngrams
+            for (ngram, count) in protein_letter_ngram_counts.items()
+        }
 
-        freq_sequence = freq_sequence.type(torch.float32)
+        # generate a tensor of the frequency values
+        sequence_frequencies = torch.tensor(
+            list(protein_letter_ngram_frequencies.values()), dtype=torch.float32
+        )
 
-        return freq_sequence
+        return sequence_frequencies
 
     def sequence_to_label_encoding(self, sequence):
         label_encoded_sequence = [

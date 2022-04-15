@@ -46,6 +46,7 @@ from utils import (
     logger,
     logging_formatter_time_message,
     prettify_confusion_matrix,
+    protein_letters,
 )
 
 
@@ -61,12 +62,11 @@ class ProteinCodingClassifier(pl.LightningModule):
 
         self.dna_sequence_mapper = self.hparams.dna_sequence_mapper
 
-        # the number of residues is "biologically hardcoded"
-        num_residues = 20
-        input_size = int(
-            math.factorial(num_residues)
-            / math.factorial(num_residues - self.hparams.window_length)
-        )
+        num_protein_letters = len(protein_letters)
+        # number of protein letters "k-tuples", aka "permutations with repetition"
+        num_protein_letter_ngrams = num_protein_letters**self.hparams.ngram_length
+        input_size = num_protein_letter_ngrams
+
         output_size = 1
 
         self.num_connections = self.hparams.num_connections
@@ -75,8 +75,8 @@ class ProteinCodingClassifier(pl.LightningModule):
             in_features=input_size, out_features=self.num_connections
         )
 
-        self.dropout = nn.Dropout(self.hparams.dropout_probability)
-        self.relu = nn.ReLU()
+        # self.dropout = nn.Dropout(self.hparams.dropout_probability)
+        # self.relu = nn.ReLU()
 
         self.output_layer = nn.Linear(
             in_features=self.num_connections, out_features=output_size
@@ -88,10 +88,10 @@ class ProteinCodingClassifier(pl.LightningModule):
 
     def forward(self, x):
         x = self.input_layer(x)
-        x = self.dropout(x)
-        x = self.relu(x)
+        # x = self.dropout(x)
+        # x = self.relu(x)
         x = self.output_layer(x)
-        x = self.dropout(x)
+        # x = self.dropout(x)
         x = self.final_activation(x)
 
         return x
@@ -107,7 +107,6 @@ class ProteinCodingClassifier(pl.LightningModule):
         output = self(features)
 
         labels = labels.unsqueeze(1)
-        labels = labels.to(torch.float32)
 
         # loss function
         training_loss = F.binary_cross_entropy(output, labels)
@@ -130,7 +129,6 @@ class ProteinCodingClassifier(pl.LightningModule):
         output = self(features)
 
         labels = labels.unsqueeze(1)
-        labels = labels.to(torch.float32)
 
         validation_loss = F.binary_cross_entropy(output, labels)
         self.log("validation_loss", validation_loss)
@@ -181,6 +179,7 @@ class ProteinCodingClassifier(pl.LightningModule):
         predictions = self.get_predictions(output)
 
         labels = labels.unsqueeze(1)
+        labels = labels.to(torch.int32)
 
         self.test_accuracy(predictions, labels)
         self.test_precision(predictions, labels)
@@ -219,7 +218,7 @@ class ProteinCodingClassifier(pl.LightningModule):
 
     def get_predictions(self, output):
         threshold_value = 0.5
-        threshold = torch.Tensor([threshold_value]).to(device=self.device)
+        threshold = torch.tensor([threshold_value]).to(device=self.device)
 
         predictions = (output > threshold).to(dtype=torch.int32)
         return predictions
@@ -241,11 +240,10 @@ def get_item_freq_features(self, index):
     sequence = sample["sequence"]
     coding = sample["coding"]
 
-    coding_value = int(coding)
+    sequence_frequencies = self.dna_sequence_mapper.sequence_to_frequencies(sequence)
+    label_tensor = torch.tensor(int(coding), dtype=torch.float32)
 
-    freq_sequence = self.dna_sequence_mapper.sequence_to_freq(sequence)
-
-    item = (freq_sequence, coding_value)
+    item = (sequence_frequencies, label_tensor)
 
     return item
 
@@ -326,6 +324,7 @@ def main():
 
         # instantiate neural network
         network = ProteinCodingClassifier(**configuration)
+        logger.info(network)
 
         # don't use a per-experiment subdirectory
         logging_name = ""
