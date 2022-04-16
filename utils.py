@@ -424,7 +424,8 @@ def prettify_confusion_matrix(confusion_matrix, labels, reverse_order=False):
     for row, label in enumerate(labels):
         confusion_matrix_string += label.center(column_width)
         for column in range(len(labels)):
-            confusion_matrix_string += f"{confusion_matrix[row, column]}".center(
+            field_value = int(confusion_matrix[row, column])
+            confusion_matrix_string += f"{field_value}".center(
                 column_width
             )
         confusion_matrix_string += "\n"
